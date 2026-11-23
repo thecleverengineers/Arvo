@@ -208,7 +208,7 @@ router.patch('/applications/:id/review', asyncRoute(async (req, res) => {
 
 router.get('/settings', asyncRoute(async (_req, res) => {
   let settings = await PlatformSettings.findOne({ key: 'main' })
-  if (!settings) settings = await PlatformSettings.create({ key: 'main', languages: ['en'], themeIds: ['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'], paymentMethods: [] })
+  if (!settings) settings = await PlatformSettings.create({ key: 'main', languages: ['en'], themeIds: ['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'], activeTheme: 'emerald', paymentMethods: [] })
   const emailConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD)
   res.json({ settings, integrations: { emailConfigured } })
 }))
