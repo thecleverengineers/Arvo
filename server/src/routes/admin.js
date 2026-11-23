@@ -15,7 +15,6 @@ const planInput = z.object({
   summary: z.string().trim().max(500).default(''),
   details: z.string().trim().max(10000).default(''),
   minimum: z.union([z.number(), z.string()]),
-  termMonths: z.coerce.number().int().min(1).max(600),
   riskLabel: z.string().trim().max(80).default('See plan documents'),
   termsUrl: z.string().trim().max(1000).default(''),
   imageUrl: z.string().max(600_000).default(''),

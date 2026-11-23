@@ -20,7 +20,7 @@ function getRequestKey(req, res) {
 }
 
 function publicPlan(plan) {
-  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, minimumPaise: plan.minimumPaise, minimum: asRupees(plan.minimumPaise), termMonths: plan.termMonths, riskLabel: plan.riskLabel, termsUrl: plan.termsUrl, imageUrl: plan.imageUrl || '' }
+  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, minimumPaise: plan.minimumPaise, minimum: asRupees(plan.minimumPaise), riskLabel: plan.riskLabel, termsUrl: plan.termsUrl, imageUrl: plan.imageUrl || '' }
 }
 
 router.get('/settings', asyncRoute(async (_req, res) => {
@@ -80,7 +80,7 @@ router.get('/wallet', requireAuth, asyncRoute(async (req, res) => {
     LedgerEntry.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(30).lean(),
     Deposit.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(20).lean(),
     Withdrawal.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(20).lean(),
-    PlanPosition.find({ userId: req.user._id, status: 'active' }).populate('planId', 'name termMonths').lean(),
+    PlanPosition.find({ userId: req.user._id, status: 'active' }).populate('planId', 'name').lean(),
     PlanApplication.find({ userId: req.user._id }).populate('planId', 'name').sort({ createdAt: -1 }).limit(20).lean(),
   ])
   res.json({
@@ -89,7 +89,7 @@ router.get('/wallet', requireAuth, asyncRoute(async (req, res) => {
     deposits,
     withdrawals,
     planApplications: planApplications.map((application) => ({ ...application, planName: application.planId?.name || 'Investment plan' })),
-    positions: positions.map((position) => ({ id: position._id, plan: position.planId?.name || 'Investment plan', termMonths: position.planId?.termMonths, amountPaise: position.amountPaise, amount: asRupees(position.amountPaise), startedAt: position.startedAt })),
+    positions: positions.map((position) => ({ id: position._id, plan: position.planId?.name || 'Investment plan', amountPaise: position.amountPaise, amount: asRupees(position.amountPaise), startedAt: position.startedAt })),
   })
 }))
 
