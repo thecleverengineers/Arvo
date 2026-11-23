@@ -29,6 +29,10 @@ app.use('/api', userRoutes)
 app.use((_req, res) => res.status(404).json({ error: 'Route not found.' }))
 
 app.use((error, _req, res, _next) => {
+  if (error?.code === 'OTP_PROVIDER_NOT_CONFIGURED') {
+    console.error('[arvo-api]', error.message)
+    return res.status(503).json({ error: 'SMS verification is unavailable right now. Please contact Arvo support.' })
+  }
   if (error?.code === 11000) return res.status(409).json({ error: 'That value is already in use.' })
   if (error?.name === 'ValidationError') return res.status(400).json({ error: 'Please check the submitted information.' })
   if (error?.name === 'CastError') return res.status(400).json({ error: 'Invalid record identifier.' })
