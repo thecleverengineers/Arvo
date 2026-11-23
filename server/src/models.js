@@ -38,6 +38,7 @@ const planSchema = new Schema({
 
 const otpChallengeSchema = new Schema({
   mobile: { type: String, required: true, index: true },
+  intent: { type: String, enum: ['signup', 'login'], default: 'signup', index: true },
   mode: { type: String, enum: ['demo', 'fast2sms'], required: true },
   status: { type: String, enum: ['pending', 'verified', 'expired'], default: 'pending', index: true },
   sentAt: { type: Date, required: true },
