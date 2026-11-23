@@ -25,10 +25,12 @@ function publicPlan(plan) {
 
 router.get('/settings', asyncRoute(async (_req, res) => {
   const settings = await PlatformSettings.findOne({ key: 'main' }).lean()
+  res.set('Cache-Control', 'no-store')
   res.json({
     paymentMethods: (settings?.paymentMethods || []).filter((method) => method.active).map(({ key, label, instructions }) => ({ key, label, instructions })),
     languages: settings?.languages?.length ? settings.languages : ['en'],
     themes: settings?.themeIds?.length ? settings.themeIds : ['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'],
+    activeTheme: ['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'].includes(settings?.activeTheme) ? settings.activeTheme : 'emerald',
   })
 }))
 
