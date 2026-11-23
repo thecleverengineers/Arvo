@@ -271,3 +271,116 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
   .auth-modal { width: min(100%, 440px); max-height: calc(100dvh - 24px); padding: 29px 21px 23px; border-radius: 22px; }
   .auth-modal h2 { font-size: 21px; }
 }
+
+
+/* Mobile-first dashboard refinements */
+.quick-actions { display: none; }
+.quick-action:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 52%, white); outline-offset: 2px; }
+@media (max-width: 640px) {
+  html { scroll-padding-top: 76px; }
+  .app-shell { min-height: 100dvh; padding-bottom: calc(78px + env(safe-area-inset-bottom)); overflow-x: clip; }
+  .topbar { height: 62px; padding: 0 16px; }
+  .brand { gap: 8px; }
+  .brand-word { font-size: 22px; }
+  .topbar-right { gap: 8px; }
+  .theme-button { width: 40px; min-height: 40px; }
+  .main-content { padding: 23px 16px 14px; }
+  .welcome-row { gap: 8px; margin-bottom: 17px; }
+  .welcome-row h1, .page-heading h1 { font-size: clamp(25px, 7vw, 30px); }
+  .welcome-row p, .page-heading p { font-size: 13px; line-height: 1.5; }
+  .help-link { min-height: 40px; font-size: 12px; }
+  .hero-grid { gap: 12px; }
+  .balance-card { min-height: 232px; padding: 19px 18px 0; border-radius: 20px; }
+  .balance-label { font-size: 10px; }
+  .balance-value { margin-top: 20px; font-size: clamp(30px, 8.6vw, 38px); }
+  .balance-change { max-width: 275px; font-size: 12px; line-height: 1.45; }
+  .balance-footer { left: 18px; bottom: 17px; gap: 22px; }
+  .balance-footer div { display: grid; gap: 5px; }
+  .balance-footer div span { font-size: 11px; }
+  .balance-footer strong { font-size: 14px; }
+  .balance-arrow { width: 36px; height: 36px; margin-left: -8px; }
+  .hero-line { left: 28%; bottom: 66px; height: 64px; opacity: .38; }
+  .side-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .small-stat-card { min-height: 122px; padding: 14px; border-radius: 16px; }
+  .stat-card-top { margin-bottom: 12px; }
+  .stat-icon { width: 36px; height: 36px; border-radius: 12px; }
+  .small-stat-card > strong { font-size: 21px; }
+  .stat-caption { font-size: 11px; line-height: 1.4; }
+  .quick-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-top: 13px; }
+  .quick-action { min-width: 0; min-height: 82px; padding: 10px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--border); border-radius: 15px; color: var(--text); background: var(--card); box-shadow: var(--shadow); cursor: pointer; }
+  .quick-action-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 12px; color: var(--deep); background: var(--soft-green); }
+  .quick-action > span:last-child { max-width: 100%; overflow: hidden; color: var(--muted); font-size: 10px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .section-block { margin-top: 31px; }
+  .section-heading { align-items: center; margin-bottom: 13px; }
+  .section-heading h2 { font-size: 19px; }
+  .home-plans { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(245px, 84%); grid-template-columns: none; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; padding: 1px 1px 9px; }
+  .home-plans .plan-card { display: grid; grid-template-columns: 91px minmax(0, 1fr); min-height: 137px; scroll-snap-align: start; border-radius: 16px; }
+  .home-plans .plan-art { height: 100%; min-height: 137px; padding: 12px; }
+  .home-plans .plan-symbol { width: 35px; height: 35px; }
+  .home-plans .plan-art-label { max-width: 70px; font-size: 6px; }
+  .home-plans .plan-card-body { min-width: 0; padding: 13px 12px; }
+  .home-plans .plan-card-body .eyebrow { font-size: 8px; }
+  .home-plans .plan-title-row h3 { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+  .home-plans .plan-card-body p { min-height: 0; margin-bottom: 10px; font-size: 10px; line-height: 1.4; }
+  .home-plans .plan-meta { flex-wrap: wrap; font-size: 9px; gap: 5px; }
+  .home-plans .plan-meta b { display: inline; }
+  .transaction-list { padding: 2px 13px; }
+  .transaction-row { min-height: 68px; gap: 11px; }
+  .transaction-icon { width: 36px; height: 36px; }
+  .transaction-description strong, .transaction-amount { font-size: 12px; }
+  .transaction-description span { font-size: 10px; }
+  .demo-note { align-items: flex-start; font-size: 10px; line-height: 1.5; }
+  .page-heading { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 19px; }
+  .page-heading p { max-width: 100%; }
+  .page-heading .secondary-button { min-height: 42px; padding: 0 14px; font-size: 12px; }
+  .all-plans { grid-template-columns: 1fr; }
+  .all-plans .plan-card-body p { font-size: 12px; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .detail-aside { position: static; }
+  .wallet-overview { gap: 16px; padding: 18px; border-radius: 19px; }
+  .wallet-main-balance > strong { font-size: 30px; }
+  .wallet-main-balance > p { font-size: 12px; }
+  .wallet-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .wallet-actions .primary-button, .wallet-actions .outline-button { min-height: 44px; justify-content: center; padding: 0 7px; font-size: 10px; }
+  .wallet-mini { gap: 9px; }
+  .wallet-mini > div { min-width: 0; padding: 13px 11px; border: 1px solid var(--border); border-radius: 13px; background: var(--card); }
+  .wallet-mini .eyebrow { min-height: 27px; font-size: 8px; line-height: 1.4; }
+  .wallet-mini strong { overflow-wrap: anywhere; font-size: 15px; }
+  .request-list { padding: 2px 12px; }
+  .request-row { min-height: 64px; gap: 8px; }
+  .request-row strong { font-size: 11px; }
+  .request-row span { font-size: 9px; }
+  .profile-card { flex-wrap: wrap; gap: 12px; padding: 15px; }
+  .profile-details { min-width: 0; }
+  .profile-details h2 { font-size: 16px; }
+  .profile-details p { overflow-wrap: anywhere; font-size: 10px; }
+  .profile-edit { min-height: 40px; padding: 0 12px; font-size: 10px; }
+  .verification-row { min-height: 68px; gap: 9px; }
+  .verification-row > div strong { font-size: 11px; }
+  .verification-row > div span { overflow-wrap: anywhere; font-size: 10px; }
+  .referral-stats > div { min-width: 0; }
+  .referral-stats strong { font-size: 18px; }
+  .level-card { min-height: 58px; }
+  .level-content strong, .level-people strong { font-size: 10px; }
+  .level-content span, .level-people span { font-size: 9px; }
+  .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; transform: none; width: 100%; min-height: calc(66px + env(safe-area-inset-bottom)); padding: 6px 7px calc(7px + env(safe-area-inset-bottom)); justify-content: space-around; border-width: 1px 0 0; border-radius: 17px 17px 0 0; background: color-mix(in srgb, var(--card) 96%, transparent); box-shadow: 0 -8px 28px rgba(24,39,31,.1); }
+  .nav-item { width: auto; min-width: 0; min-height: 50px; flex: 1; gap: 5px; border-radius: 12px; }
+  .nav-item svg { width: 21px; height: 21px; }
+  .nav-item span { font-size: 10px; }
+  .toast { bottom: calc(79px + env(safe-area-inset-bottom)); max-width: calc(100% - 24px); font-size: 11px; }
+  .modal-backdrop { align-items: flex-start; overflow-y: auto; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+  .auth-modal { width: min(100%, 440px); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); margin: auto 0; padding: 27px 20px 22px; border-radius: 23px; }
+  .auth-modal .modal-brand-mark { width: 43px; height: 43px; }
+  .auth-modal h2 { font-size: clamp(21px, 6vw, 25px); }
+  .auth-modal > p { font-size: 13px; line-height: 1.45; }
+  .auth-modal .field-label { font-size: 11px; }
+  .auth-modal .form-input, .auth-modal .phone-field { min-height: 50px; font-size: 16px; border-radius: 12px; }
+  .auth-modal .phone-field input { font-size: 16px; }
+  .auth-modal .full-button { min-height: 52px; font-size: 14px; }
+  .auth-mode-switch { margin-top: 12px; font-size: 12px; }
+  .auth-modal .modal-security { margin-top: 15px; font-size: 10px; }
+  .action-modal { max-height: calc(100dvh - 24px); padding: 23px 18px; }
+  .form-input { min-height: 46px; font-size: 16px; }
+  .admin-tabs button { min-height: 42px; font-size: 11px; }
+  .admin-stat { min-height: 91px; }
+}
