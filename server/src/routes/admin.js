@@ -227,6 +227,30 @@ router.put('/settings', asyncRoute(async (req, res) => {
   res.json({ settings })
 }))
 
+// Only authenticated administrators may publish a platform-wide visual theme.
+router.patch('/theme', asyncRoute(async (req, res) => {
+  const parsed = z.object({
+    activeTheme: z.enum(['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy']),
+  }).strict().safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ error: 'Select a valid Arvo theme.' })
+
+  const previous = await PlatformSettings.findOne({ key: 'main' }).lean()
+  const settings = await PlatformSettings.findOneAndUpdate(
+    { key: 'main' },
+    { $set: { activeTheme: parsed.data.activeTheme, updatedBy: req.user._id },
+      $setOnInsert: { languages: ['en'], themeIds: ['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'], paymentMethods: [] } },
+    { new: true, upsert: true, runValidators: true },
+  )
+  await AuditLog.create({
+    actorId: req.user._id,
+    action: 'theme.published',
+    targetType: 'platformSettings',
+    targetId: settings._id,
+    details: { from: previous?.activeTheme || 'emerald', to: settings.activeTheme },
+  })
+  res.json({ activeTheme: settings.activeTheme, settings })
+}))
+
 router.get('/ledger', asyncRoute(async (req, res) => {
   const entries = await LedgerEntry.find().populate('userId', 'name mobile').sort({ createdAt: -1 }).limit(200).lean()
   res.json({ entries })
