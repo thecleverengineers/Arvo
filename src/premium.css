@@ -246,3 +246,15 @@ body { background: #e8e9e8; }
 @media (prefers-reduced-motion: reduce) {
   .app-shell *, .app-shell *::before, .app-shell *::after { scroll-behavior:auto!important; transition-duration:.01ms!important; animation-duration:.01ms!important; }
 }
+
+/* Fixed prices are edited per plan; keep the admin rows compact on phones. */
+.admin-plan-summary { min-width: 105px; flex: 1 1 140px!important; }
+.admin-plan-price { width: 122px; flex: 0 0 122px; display: grid; gap: 4px; color: var(--muted); font-size: 8px; }
+.admin-plan-price .form-input { min-height: 32px; padding: 0 8px; font-size: 11px; }
+.admin-list-row > .admin-plan-actions { flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .admin-plan-row { align-items: flex-start; padding: 9px 0; gap: 8px; }
+  .admin-plan-row > .admin-plan-summary { min-width: calc(100% - 58px); }
+  .admin-plan-price { width: 100%; flex: 1 1 100%; }
+  .admin-plan-row > .admin-plan-actions { flex: 1 1 100%; justify-content: flex-start; }
+}

@@ -20,7 +20,7 @@ function getRequestKey(req, res) {
 }
 
 function publicPlan(plan) {
-  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, minimumPaise: plan.minimumPaise, minimum: asRupees(plan.minimumPaise), riskLabel: plan.riskLabel, termsUrl: plan.termsUrl, imageUrl: plan.imageUrl || '' }
+  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, pricePaise: plan.pricePaise || null, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, riskLabel: plan.riskLabel, termsUrl: plan.termsUrl, imageUrl: plan.imageUrl || '' }
 }
 
 router.get('/settings', asyncRoute(async (_req, res) => {
@@ -35,12 +35,12 @@ router.get('/settings', asyncRoute(async (_req, res) => {
 }))
 
 router.get('/plans', asyncRoute(async (_req, res) => {
-  const plans = await InvestmentPlan.find({ isActive: true }).sort({ createdAt: 1 }).lean()
+  const plans = await InvestmentPlan.find({ isActive: true, pricePaise: { $gt: 0 } }).sort({ createdAt: 1 }).lean()
   res.json({ plans: plans.map(publicPlan) })
 }))
 
 router.get('/plans/:slug', asyncRoute(async (req, res) => {
-  const plan = await InvestmentPlan.findOne({ slug: req.params.slug, isActive: true }).lean()
+  const plan = await InvestmentPlan.findOne({ slug: req.params.slug, isActive: true, pricePaise: { $gt: 0 } }).lean()
   if (!plan) return res.status(404).json({ error: 'Plan not found.' })
   res.json({ plan: publicPlan(plan) })
 }))
@@ -185,7 +185,8 @@ router.post('/plans/:id/apply', requireAuth, asyncRoute(async (req, res) => {
   if (!plan) return res.status(404).json({ error: 'Plan not found or inactive.' })
   const amountPaise = toPaise(req.body?.amount)
   if (!amountPaise) return res.status(400).json(amountError)
-  if (amountPaise < plan.minimumPaise) return res.status(400).json({ error: `The minimum amount for this plan is ₹${asRupees(plan.minimumPaise).toLocaleString('en-IN')}.` })
+  if (!plan.pricePaise) return res.status(409).json({ error: 'This plan does not have a price yet.' })
+  if (amountPaise !== plan.pricePaise) return res.status(400).json({ error: `This plan has a fixed price of ₹${asRupees(plan.pricePaise).toLocaleString('en-IN')}.` })
   const application = await PlanApplication.create({ userId: req.user._id, planId: plan._id, requestKey, amountPaise })
   res.status(201).json({ application })
 }))

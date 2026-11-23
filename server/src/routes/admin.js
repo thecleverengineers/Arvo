@@ -14,21 +14,27 @@ const planInput = z.object({
   category: z.string().trim().max(50).default('Investment plan'),
   summary: z.string().trim().max(500).default(''),
   details: z.string().trim().max(10000).default(''),
-  minimum: z.union([z.number(), z.string()]),
+  price: z.union([z.number(), z.string()]).nullable().optional(),
   riskLabel: z.string().trim().max(80).default('See plan documents'),
   termsUrl: z.string().trim().max(1000).default(''),
   imageUrl: z.string().max(600_000).default(''),
   isActive: z.boolean().default(true),
 })
 
-function parsePlan(body) {
+function parsePlan(body, { requirePrice = false } = {}) {
   const parsed = planInput.safeParse(body)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
-  const minimumPaise = toPaise(parsed.data.minimum)
-  if (!minimumPaise) return { error: 'Enter a valid minimum amount in rupees.' }
-  if (parsed.data.termsUrl && !/^https:\/\//i.test(parsed.data.termsUrl)) return { error: 'Plan document links must use HTTPS.' }
-  if (parsed.data.imageUrl && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(parsed.data.imageUrl)) return { error: 'Upload a valid JPEG plan image.' }
-  return { data: { ...parsed.data, minimumPaise } }
+  const { price, ...planData } = parsed.data
+  let pricePaise
+  if (price !== undefined && price !== null) {
+    pricePaise = toPaise(price)
+    if (!pricePaise) return { error: 'Enter a valid fixed price in rupees.' }
+  } else if (requirePrice) {
+    return { error: 'Enter a valid fixed price in rupees.' }
+  }
+  if (planData.termsUrl && !/^https:\/\//i.test(planData.termsUrl)) return { error: 'Plan document links must use HTTPS.' }
+  if (planData.imageUrl && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(planData.imageUrl)) return { error: 'Upload a valid JPEG plan image.' }
+  return { data: pricePaise ? { ...planData, pricePaise } : planData }
 }
 
 router.get('/overview', asyncRoute(async (_req, res) => {
@@ -62,24 +68,27 @@ router.patch('/users/:id', asyncRoute(async (req, res) => {
 
 router.get('/plans', asyncRoute(async (_req, res) => {
   const plans = await InvestmentPlan.find().sort({ createdAt: -1 }).lean()
-  res.json({ plans: plans.map((plan) => ({ ...plan, minimum: asRupees(plan.minimumPaise) })) })
+  res.json({ plans: plans.map((plan) => ({ ...plan, price: plan.pricePaise ? asRupees(plan.pricePaise) : null })) })
 }))
 
 router.post('/plans', asyncRoute(async (req, res) => {
-  const parsed = parsePlan(req.body)
+  const parsed = parsePlan(req.body, { requirePrice: true })
   if (parsed.error) return res.status(400).json({ error: parsed.error })
   const plan = await InvestmentPlan.create({ ...parsed.data, createdBy: req.user._id })
   await AuditLog.create({ actorId: req.user._id, action: 'plan.created', targetType: 'investmentPlan', targetId: plan._id, details: { slug: plan.slug } })
-  res.status(201).json({ plan: { ...plan.toObject(), minimum: asRupees(plan.minimumPaise) } })
+  res.status(201).json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null } })
 }))
 
 router.patch('/plans/:id', asyncRoute(async (req, res) => {
   const parsed = parsePlan(req.body)
   if (parsed.error) return res.status(400).json({ error: parsed.error })
+  const currentPlan = await InvestmentPlan.findById(req.params.id).select('pricePaise')
+  if (!currentPlan) return res.status(404).json({ error: 'Plan not found.' })
+  const nextPricePaise = parsed.data.pricePaise ?? currentPlan.pricePaise
+  if (parsed.data.isActive && !nextPricePaise) return res.status(400).json({ error: 'Set a fixed price before publishing this plan.' })
   const plan = await InvestmentPlan.findByIdAndUpdate(req.params.id, parsed.data, { new: true, runValidators: true })
-  if (!plan) return res.status(404).json({ error: 'Plan not found.' })
   await AuditLog.create({ actorId: req.user._id, action: 'plan.updated', targetType: 'investmentPlan', targetId: plan._id, details: { slug: plan.slug } })
-  res.json({ plan: { ...plan.toObject(), minimum: asRupees(plan.minimumPaise) } })
+  res.json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null } })
 }))
 
 router.get('/deposits', asyncRoute(async (req, res) => {

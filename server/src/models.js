@@ -28,7 +28,7 @@ const planSchema = new Schema({
   category: { type: String, trim: true, maxlength: 50, default: 'Investment plan' },
   summary: { type: String, trim: true, maxlength: 500, default: '' },
   details: { type: String, trim: true, maxlength: 10000, default: '' },
-  minimumPaise: { type: Number, required: true, min: 1 },
+  pricePaise: { type: Number, required: true, min: 1 },
   riskLabel: { type: String, trim: true, maxlength: 80, default: 'See plan documents' },
   termsUrl: { type: String, trim: true, maxlength: 1000, default: '' },
   imageUrl: { type: String, maxlength: 600_000, default: '' },
