@@ -19,6 +19,13 @@ router.post('/otp/send', sendLimiter, asyncRoute(async (req, res) => {
   const mobile = cleanMobile(req.body?.mobile)
   const parsed = phoneSchema.safeParse(mobile)
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
+  const intentResult = z.enum(['signup', 'login']).safeParse(req.body?.intent)
+  if (!intentResult.success) return res.status(400).json({ error: 'Choose sign up or log in to continue.' })
+  const intent = intentResult.data
+  const existingUser = await User.findOne({ mobile })
+  if (intent === 'signup' && existingUser) return res.status(409).json({ error: 'This mobile already has an Arvo account. Sign in instead.' })
+  if (intent === 'login' && !existingUser) return res.status(404).json({ error: 'No Arvo account was found for this mobile. Create an account first.' })
+  if (existingUser && existingUser.status !== 'active') return res.status(403).json({ error: 'This account has been suspended.' })
 
   const now = new Date()
   const lastMinute = new Date(now.getTime() - 60_000)
@@ -31,7 +38,7 @@ router.post('/otp/send', sendLimiter, asyncRoute(async (req, res) => {
   const mode = isDemoAuth() ? 'demo' : 'fast2sms'
   await sendOtp(mobile)
   const expiresAt = new Date(now.getTime() + Number(process.env.FAST2SMS_OTP_EXPIRY_MINUTES || 10) * 60_000)
-  await OtpChallenge.create({ mobile, mode, sentAt: now, expiresAt })
+  await OtpChallenge.create({ mobile, intent, mode, sentAt: now, expiresAt })
   res.json({ ok: true, expiresInSeconds: Number(process.env.FAST2SMS_OTP_EXPIRY_MINUTES || 10) * 60, demoOtp: mode === 'demo' ? (process.env.DEMO_OTP || '246810') : undefined })
 }))
 
@@ -41,16 +48,23 @@ router.post('/otp/verify', sendLimiter, asyncRoute(async (req, res) => {
   const parsed = phoneSchema.safeParse(mobile)
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
   if (!/^\d{4,10}$/.test(otp)) return res.status(400).json({ error: 'Enter the verification code.' })
+  const intentResult = z.enum(['signup', 'login']).safeParse(req.body?.intent)
+  if (!intentResult.success) return res.status(400).json({ error: 'Choose sign up or log in to continue.' })
+  const intent = intentResult.data
 
-  const challenge = await OtpChallenge.findOne({ mobile, status: 'pending' }).sort({ createdAt: -1 })
-  if (!challenge || challenge.expiresAt < new Date()) return res.status(400).json({ error: 'This code has expired. Request a new one.' })
+  const challenge = await OtpChallenge.findOne({ mobile, intent, status: 'pending' }).sort({ createdAt: -1 })
+  if (!challenge || challenge.expiresAt < new Date()) return res.status(400).json({ error: 'This code has expired or does not match this sign-in flow. Request a new one.' })
   if (challenge.attempts >= 5) return res.status(429).json({ error: 'Too many incorrect attempts. Request a new code.' })
   let user = await User.findOne({ mobile })
+  if (intent === 'login' && !user) return res.status(404).json({ error: 'No Arvo account was found for this mobile. Create an account first.' })
+  if (intent === 'signup' && user) return res.status(409).json({ error: 'This mobile already has an Arvo account. Sign in instead.' })
+  if (user && user.status !== 'active') return res.status(403).json({ error: 'This account has been suspended.' })
+
   const name = z.string().trim().min(2).max(100).safeParse(req.body?.name || '')
   const email = z.string().trim().email().max(254).safeParse(req.body?.email || '')
   const referralCode = String(req.body?.referralCode || '').trim().toUpperCase().slice(0, 20)
   let referrer = null
-  if (!user) {
+  if (intent === 'signup') {
     if (!name.success) return res.status(400).json({ error: 'Enter your name to finish creating your account.' })
     if (req.body?.email && !email.success) return res.status(400).json({ error: 'Enter a valid email address.' })
     if (referralCode) {
@@ -59,6 +73,7 @@ router.post('/otp/verify', sendLimiter, asyncRoute(async (req, res) => {
       if (referrer.mobile === mobile) return res.status(400).json({ error: 'You cannot use your own referral code.' })
     }
   }
+
   challenge.attempts += 1
   await challenge.save()
 
@@ -69,7 +84,7 @@ router.post('/otp/verify', sendLimiter, asyncRoute(async (req, res) => {
 
   challenge.status = 'verified'
   await challenge.save()
-  if (!user) {
+  if (intent === 'signup') {
     const adminMobile = configuredAdminMobile()
     try {
       user = await User.create({
@@ -83,7 +98,7 @@ router.post('/otp/verify', sendLimiter, asyncRoute(async (req, res) => {
       await Wallet.create({ userId: user._id })
     } catch (error) {
       if (error.code !== 11000) throw error
-      user = await User.findOne({ mobile })
+      return res.status(409).json({ error: 'An account was just created for this mobile. Sign in instead.' })
     }
   } else {
     const adminMobile = configuredAdminMobile()
