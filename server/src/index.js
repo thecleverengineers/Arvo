@@ -45,7 +45,7 @@ async function start() {
   if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) throw new Error('Set a JWT_SECRET with at least 32 characters before production startup.')
   if (!process.env.MONGODB_URI) throw new Error('Set MONGODB_URI before starting the API.')
   await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 })
-  await PlatformSettings.updateOne({ key: 'main' }, { $setOnInsert: { languages: ['en'], themeIds: ['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'], paymentMethods: [] } }, { upsert: true })
+  await PlatformSettings.updateOne({ key: 'main' }, { $setOnInsert: { languages: ['en'], themeIds: ['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'], activeTheme: 'emerald', paymentMethods: [] } }, { upsert: true })
   app.listen(port, () => console.log(`Arvo API listening on port ${port}`))
 }
 
