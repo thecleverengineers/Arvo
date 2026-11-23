@@ -187,7 +187,7 @@ function App() {
   if (user?.role === 'admin') navItems.push(['Admin','shield'])
   const currentTheme = themes.find((item) => item.id === theme) || themes[0]
 
-  return <div className="app-shell" data-theme={theme}>
+  return <div className="app-shell" data-theme={theme} data-view={page === 'Admin' ? 'admin' : 'mobile'}>
     <header className="topbar">
       <button className="brand" onClick={() => navigate('Home')} aria-label="Arvo home">{brandLogo ? <img className="brand-image" src={brandLogo} alt="Arvo"/> : <><span className="brand-mark">A</span><span className="brand-word">arvo<span>.</span></span></>}</button>
       <div className="topbar-right">
