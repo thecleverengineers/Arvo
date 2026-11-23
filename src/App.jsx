@@ -42,10 +42,10 @@ function Icon({ name, size = 20, strokeWidth = 1.7 }) {
 function App() {
   const [user, setUser] = useState(null)
   const [page, setPage] = useState('Home')
-  const [theme, setTheme] = useState(() => localStorage.getItem('arvo-theme') || 'emerald')
-  const [themeOpen, setThemeOpen] = useState(false)
+  // The administrator publishes one theme for everyone; clients only read it.
+  const [theme, setTheme] = useState('emerald')
   const [plans, setPlans] = useState([])
-  const [settings, setSettings] = useState({ paymentMethods: [], languages: ['en'], themes: themes.map((item) => item.id) })
+  const [settings, setSettings] = useState({ paymentMethods: [], languages: ['en'], themes: themes.map((item) => item.id), activeTheme: 'emerald' })
   const [wallet, setWallet] = useState(null)
   const [referrals, setReferrals] = useState(null)
   const [news, setNews] = useState([])
@@ -68,7 +68,10 @@ function App() {
   async function loadPublicData() {
     const [planData, settingData, newsData, logoData, iconData] = await Promise.allSettled([api('/plans'), api('/settings'), api('/content/news'), api('/content/logo'), api('/content/icon')])
     if (planData.status === 'fulfilled') setPlans(planData.value.plans || [])
-    if (settingData.status === 'fulfilled') setSettings(settingData.value)
+    if (settingData.status === 'fulfilled') {
+      setSettings(settingData.value)
+      setTheme(settingData.value.activeTheme || 'emerald')
+    }
     if (newsData.status === 'fulfilled') setNews(newsData.value.items || [])
     if (logoData.status === 'fulfilled') setBrandLogo(logoData.value.items?.[0]?.imageUrl || '')
     if (iconData.status === 'fulfilled') setBrandIcon(iconData.value.items?.[0]?.imageUrl || '')
@@ -89,7 +92,25 @@ function App() {
   }, [])
 
   useEffect(() => { if (user) loadAccountData(); else { setWallet(null); setReferrals(null) } }, [user?.id])
-  useEffect(() => { localStorage.setItem('arvo-theme', theme) }, [theme])
+  // Keep an already-open app in sync when the administrator publishes a theme.
+  useEffect(() => {
+    let alive = true
+    const refreshTheme = () => {
+      if (document.visibilityState === 'hidden') return
+      api('/settings').then((result) => {
+        if (!alive) return
+        setSettings(result)
+        setTheme(result.activeTheme || 'emerald')
+      }).catch(() => {}) // Keep the last known live theme if temporarily offline.
+    }
+    const timer = window.setInterval(refreshTheme, 60000)
+    document.addEventListener('visibilitychange', refreshTheme)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', refreshTheme)
+    }
+  }, [])
   useEffect(() => {
     if (!accountMenuOpen) return undefined
     const closeOnOutside = (event) => { if (event.target instanceof Element && !event.target.closest('.account-menu-wrap')) setAccountMenuOpen(false) }
@@ -170,10 +191,7 @@ function App() {
     <header className="topbar">
       <button className="brand" onClick={() => navigate('Home')} aria-label="Arvo home">{brandLogo ? <img className="brand-image" src={brandLogo} alt="Arvo"/> : <><span className="brand-mark">A</span><span className="brand-word">arvo<span>.</span></span></>}</button>
       <div className="topbar-right">
-        <div className="theme-wrap">
-          <button className="theme-button" onClick={() => setThemeOpen(!themeOpen)}><span className="theme-dots">{currentTheme.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span><span className="theme-button-label">{currentTheme.name}</span><span className="tiny-caret">⌄</span></button>
-          {themeOpen && <div className="theme-menu">{themes.filter((item) => settings.themes?.includes(item.id)).map((item) => <button key={item.id} onClick={() => { setTheme(item.id); setThemeOpen(false) }}><span className="theme-dots">{item.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span><span>{item.name}</span>{theme === item.id && <Icon name="check" size={15}/>}</button>)}</div>}
-        </div>
+        <div className="live-theme-chip" title={`Live visual identity: ${currentTheme.name}`}><span className="live-theme-gem" style={{ background: currentTheme.colors[0] }}/><span className="live-theme-label">{currentTheme.name}</span></div>
         {user ? <><button className="icon-button notification-button" aria-label="Support chat" onClick={() => navigate('Support')}><Icon name="bell"/><i/></button><div className="account-menu-wrap">
           <button className="avatar-button" onClick={() => setAccountMenuOpen((open) => !open)} aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen}>{initials(user.name)}</button>
           {accountMenuOpen && <div className="account-menu" role="menu" aria-label="Account menu">
@@ -199,8 +217,8 @@ function App() {
         {page === 'Plans' && activePlan && <PlanDetail plan={activePlan} onBack={() => setActivePlan(null)} onApply={submitPlan}/>}
         {page === 'Wallet' && <WalletPage wallet={wallet} onAction={setAction} notify={notify}/>}
         {page === 'Referrals' && <ReferralPage referrals={referrals} notify={notify}/>}
-        {page === 'Profile' && <ProfilePage user={user} onSave={saveProfile} onVerify={verifyProfile} onSendEmail={sendEmailVerification} onSupport={() => navigate('Support')} onAdmin={() => navigate('Admin')} onLogout={logout} notify={notify}/>}
-        {page === 'Settings' && <SettingsPage theme={theme} onThemeChange={setTheme} availableThemes={settings.themes || themes.map((item) => item.id)}/>}
+        {page === 'Profile' && <ProfilePage user={user} theme={theme} onSave={saveProfile} onVerify={verifyProfile} onSendEmail={sendEmailVerification} onSupport={() => navigate('Support')} onAdmin={() => navigate('Admin')} onLogout={logout} notify={notify}/>}
+        {page === 'Settings' && <SettingsPage theme={theme}/>}
         {page === 'Support' && <SupportChat notify={notify}/>}
         {page === 'Admin' && user.role === 'admin' && <AdminPage notify={notify} onRefresh={async () => { await loadPublicData(); await loadAccountData() }}/>}
       </>}
@@ -329,31 +347,62 @@ function ReferralPage({ referrals, notify }) {
   return <><PageHeading eyebrow="GROW TOGETHER" title="Your referral circle" subtitle="Review account referrals across the three configured levels."/><section className="referral-hero"><div className="referral-copy"><span className="eyebrow">YOUR INVITE CODE</span><h2>Good things are<br/>better shared.</h2><p>Share your code with someone joining Arvo.</p><div className="invite-code"><span>{referrals?.referralCode || '—'}</span><button onClick={copyCode} aria-label="Copy invite code"><Icon name="copy" size={17}/></button></div></div><div className="referral-illustration"><div className="referral-ring ring-a"/><div className="referral-ring ring-b"/><div className="referral-center">A</div><span className="referral-node node-one">1</span><span className="referral-node node-two">2</span><span className="referral-node node-three">3</span><span className="referral-node node-four">+</span></div></section><section className="referral-stats"><div><span className="eyebrow">TOTAL NETWORK</span><strong>{referrals?.totalMembers || 0}</strong><span>across three levels</span></div><div><span className="eyebrow">LEVEL 1</span><strong>{levels[0]?.count || 0}</strong><span>direct referrals</span></div><div><span className="eyebrow">LEVEL 2 + 3</span><strong>{(levels[1]?.count || 0) + (levels[2]?.count || 0)}</strong><span>extended network</span></div></section><section className="section-block"><div className="section-heading"><div><span className="eyebrow">THREE LEVELS</span><h2>Referral breakdown</h2></div></div><div className="level-list">{levels.map((level) => <div className="level-card" key={level.level}><span className={`level-icon ${['level-green','level-gold','level-blue'][(level.level - 1) % 3]}`}><Icon name="users" size={19}/></span><div className="level-content"><strong>Level {level.level}</strong><span>{level.level === 1 ? 'People you invited directly' : `Referrals through level ${level.level - 1}`}</span></div><div className="level-people"><strong>{level.count} members</strong><span>tracked accounts</span></div><span className="level-rate"><Icon name="chevron" size={17}/></span></div>)}</div></section><div className="demo-note"><span className="demo-mark">i</span><span>Referral tracking follows the three-level account tree. Reward or commission rules are not enabled in this build.</span></div></>
 }
 
-function SettingsPage({ theme, onThemeChange, availableThemes }) {
-  const choices = themes.filter((item) => availableThemes?.includes(item.id))
+function SettingsPage({ theme }) {
+  const current = themes.find((item) => item.id === theme) || themes[0]
   return <>
-    <PageHeading eyebrow="PERSONALIZE ARVO" title="Settings" subtitle="Choose the appearance that feels right for your account."/>
-    <section className="settings-panel">
-      <div className="settings-panel-heading"><span className="eyebrow">APPEARANCE</span><h2>Choose a theme</h2><p>Your selection is saved on this device.</p></div>
-      <div className="settings-theme-grid">
-        {choices.map((item) => <button key={item.id} className={`settings-theme-card ${theme === item.id ? 'selected' : ''}`} onClick={() => onThemeChange(item.id)} aria-pressed={theme === item.id}>
-          <span className="settings-theme-preview">{item.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span>
-          <span className="settings-theme-name"><strong>{item.name}</strong><small>{theme === item.id ? 'Currently selected' : 'Tap to apply'}</small></span>
-          {theme === item.id && <Icon name="check" size={18}/>}
-        </button>)}
-      </div>
+    <PageHeading eyebrow="YOUR ARVO EXPERIENCE" title="Settings" subtitle="Your app uses the visual identity selected by the Arvo administrator."/>
+    <section className="settings-panel live-appearance-panel">
+      <div className="settings-panel-heading"><span className="eyebrow">CURRENT LIVE THEME</span><h2>{current.name}</h2><p>The same premium theme is published to all Arvo users.</p></div>
+      <div className="live-appearance-swatches">{current.colors.map((color) => <span key={color} style={{ background: color }}/>)}</div>
+      <p className="live-appearance-help"><Icon name="shield" size={17}/> Appearance changes are managed by the administrator to keep the experience consistent.</p>
     </section>
   </>
 }
 
-function ProfilePage({ user, onSave, onVerify, onSendEmail, onSupport, onAdmin, onLogout, notify }) {
+function ThemeStudio({ activeTheme, draftTheme, onSelect, onPublish, busy }) {
+  const selected = themes.find((item) => item.id === draftTheme) || themes[0]
+  const live = themes.find((item) => item.id === activeTheme) || themes[0]
+  return <section className="theme-studio">
+    <div className="studio-intro">
+      <div><span className="eyebrow">GLOBAL VISUAL IDENTITY</span><h2>Choose the experience everyone sees.</h2><p>Explore all five premium mobile themes. Selecting a preview does not change the live app until you publish it.</p></div>
+      <span className="studio-live-status"><i/> Live now: {live.name}</span>
+    </div>
+    <div className="studio-grid">
+      {themes.map((item) => <button type="button" key={item.id} onClick={() => onSelect(item.id)} aria-pressed={draftTheme === item.id} className={`studio-theme-card ${draftTheme === item.id ? 'is-selected' : ''}`} >
+        <span className="studio-mini-phone" data-preview-theme={item.id}>
+          <span className="studio-phone-top"><span>9:41</span><span>●●●</span></span>
+          <span className="studio-phone-brand"><span className="studio-phone-logo">A</span> arvo.</span>
+          <span className="studio-phone-greeting">Welcome back</span>
+          <span className="studio-phone-balance"><small>Your portfolio</small><strong>₹ 1,25,430</strong><em>PORTFOLIO OVERVIEW</em><span className="studio-phone-chart"/></span>
+          <span className="studio-phone-tiles"><i/><i/><i/></span>
+          <span className="studio-phone-bottom"><i/><i/><i/><i/></span>
+        </span>
+        <span className="studio-theme-details">
+          <strong>{item.name}</strong>
+          <small>{{
+            emerald:'Deep emerald with luminous gold and refined contrast',
+            obsidian:'Statement charcoal surfaces with rich gold',
+            ivory:'Warm ivory, champagne accents and elegant spacing',
+            sapphire:'Midnight navy with electric blue details',
+            burgundy:'Burgundy and rose-gold with soft sophistication',
+          }[item.id]}</small>
+          <span className="studio-palette">{item.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span>
+          <span className="studio-theme-state">{item.id === activeTheme ? '● Live theme' : draftTheme === item.id ? 'Selected to preview' : 'Preview this theme'}{draftTheme === item.id && <Icon name="check" size={15}/>}</span>
+        </span>
+      </button>)}
+    </div>
+    <div className="studio-publish-bar"><div><span className="eyebrow">READY TO PUBLISH</span><strong>{selected.name}</strong><small>{activeTheme === draftTheme ? 'This is currently live for all users.' : 'Publishing updates the theme for all users on their next refresh.'}</small></div><button type="button" className="primary-button studio-publish-button" onClick={onPublish} disabled={busy || draftTheme === activeTheme}><Icon name="check" size={17}/>{busy ? 'Publishing…' : draftTheme === activeTheme ? 'Already live' : 'Publish live theme'}</button></div>
+  </section>
+}
+
+function ProfilePage({ user, theme, onSave, onVerify, onSendEmail, onSupport, onAdmin, onLogout, notify }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(user.name || '')
   const [email, setEmail] = useState(user.email || '')
   const [busy, setBusy] = useState(false)
   async function save(event) { event.preventDefault(); setBusy(true); try { await onSave({ name, email }); setEditing(false) } catch (error) { notify(error.message) } finally { setBusy(false) } }
   async function run(action) { setBusy(true); try { await action() } catch (error) { notify(error.message) } finally { setBusy(false) } }
-  return <><PageHeading eyebrow="YOUR ARVO ACCOUNT" title="Profile & verification" subtitle="Manage your account details and verification status."/><section className="profile-card" id="profile-details"><div className="profile-avatar">{initials(user.name)}</div><div className="profile-details"><span className="eyebrow">{user.role === 'admin' ? 'ADMINISTRATOR' : 'ARVO MEMBER'}</span><h2>{user.name || 'Arvo member'}</h2><p>+91 {user.mobile} {user.email ? `· ${user.email}` : ''}</p></div><button className="outline-button profile-edit" onClick={() => setEditing(!editing)}>{editing ? 'Close' : 'Edit profile'}</button></section>{editing && <form className="profile-edit-form" onSubmit={save}><label>Name<input className="form-input" value={name} onChange={(e) => setName(e.target.value)} required minLength="2"/></label><label>Email<input className="form-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)}/></label><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></form>}<section className="verification-section" id="kyc-section"><div className="section-heading"><div><span className="eyebrow">ACCOUNT SECURITY</span><h2>Verification status</h2></div></div><div className="verification-list"><div className="verification-row"><span className={`verification-icon ${user.emailVerified ? 'verified' : 'pending'}`}><Icon name={user.emailVerified ? 'check' : 'user'} size={18}/></span><div><strong>Email address</strong><span>{user.email || 'No email address added'}</span></div>{user.emailVerified ? <StatusPill status="verified"/> : <button className="inline-link" disabled={busy || !user.email} onClick={() => run(onSendEmail)}>Verify email <Icon name="chevron" size={14}/></button>}</div><div className="verification-row"><span className={`verification-icon ${user.profileStatus === 'verified' ? 'verified' : 'pending'}`}><Icon name={user.profileStatus === 'verified' ? 'check' : 'user'} size={18}/></span><div><strong>Profile verification</strong><span>{user.profileStatus === 'verified' ? 'Your profile is verified' : 'Submit your profile for administrator review'}</span></div>{user.profileStatus === 'verified' ? <StatusPill status="verified"/> : user.profileStatus === 'pending' ? <StatusPill status="pending"/> : <button className="inline-link" disabled={busy} onClick={() => run(onVerify)}>Submit <Icon name="chevron" size={14}/></button>}</div><div className="verification-row"><span className="verification-icon verified"><Icon name="check" size={18}/></span><div><strong>Mobile number</strong><span>+91 {user.mobile}</span></div><StatusPill status="verified"/></div></div></section><section className="profile-bottom-grid"><div className="preferences-card"><span className="eyebrow">PREFERENCES</span><h3>Your experience</h3><div className="preference-row"><span>Language</span><strong>English</strong></div><div className="preference-row"><span>Appearance</span><strong>{themes.find((item) => item.id === localStorage.getItem('arvo-theme'))?.name || 'Emerald Luxe'}</strong></div></div><div className="support-card"><span className="support-icon"><Icon name="help" size={19}/></span><div><span className="eyebrow">ACCOUNT SUPPORT</span><h3>Live chat</h3><p>Message the Arvo administrator from your account.</p><button className="inline-link" onClick={onSupport}>Open conversation <Icon name="chevron" size={14}/></button></div></div></section><div className="profile-actions">{user.role === 'admin' && <button className="outline-button" onClick={onAdmin}><Icon name="shield" size={16}/> Open admin panel</button>}<button className="text-button" onClick={onLogout}>Sign out</button></div></>
+  return <><PageHeading eyebrow="YOUR ARVO ACCOUNT" title="Profile & verification" subtitle="Manage your account details and verification status."/><section className="profile-card" id="profile-details"><div className="profile-avatar">{initials(user.name)}</div><div className="profile-details"><span className="eyebrow">{user.role === 'admin' ? 'ADMINISTRATOR' : 'ARVO MEMBER'}</span><h2>{user.name || 'Arvo member'}</h2><p>+91 {user.mobile} {user.email ? `· ${user.email}` : ''}</p></div><button className="outline-button profile-edit" onClick={() => setEditing(!editing)}>{editing ? 'Close' : 'Edit profile'}</button></section>{editing && <form className="profile-edit-form" onSubmit={save}><label>Name<input className="form-input" value={name} onChange={(e) => setName(e.target.value)} required minLength="2"/></label><label>Email<input className="form-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)}/></label><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></form>}<section className="verification-section" id="kyc-section"><div className="section-heading"><div><span className="eyebrow">ACCOUNT SECURITY</span><h2>Verification status</h2></div></div><div className="verification-list"><div className="verification-row"><span className={`verification-icon ${user.emailVerified ? 'verified' : 'pending'}`}><Icon name={user.emailVerified ? 'check' : 'user'} size={18}/></span><div><strong>Email address</strong><span>{user.email || 'No email address added'}</span></div>{user.emailVerified ? <StatusPill status="verified"/> : <button className="inline-link" disabled={busy || !user.email} onClick={() => run(onSendEmail)}>Verify email <Icon name="chevron" size={14}/></button>}</div><div className="verification-row"><span className={`verification-icon ${user.profileStatus === 'verified' ? 'verified' : 'pending'}`}><Icon name={user.profileStatus === 'verified' ? 'check' : 'user'} size={18}/></span><div><strong>Profile verification</strong><span>{user.profileStatus === 'verified' ? 'Your profile is verified' : 'Submit your profile for administrator review'}</span></div>{user.profileStatus === 'verified' ? <StatusPill status="verified"/> : user.profileStatus === 'pending' ? <StatusPill status="pending"/> : <button className="inline-link" disabled={busy} onClick={() => run(onVerify)}>Submit <Icon name="chevron" size={14}/></button>}</div><div className="verification-row"><span className="verification-icon verified"><Icon name="check" size={18}/></span><div><strong>Mobile number</strong><span>+91 {user.mobile}</span></div><StatusPill status="verified"/></div></div></section><section className="profile-bottom-grid"><div className="preferences-card"><span className="eyebrow">PREFERENCES</span><h3>Your experience</h3><div className="preference-row"><span>Language</span><strong>English</strong></div><div className="preference-row"><span>Appearance</span><strong>{themes.find((item) => item.id === theme)?.name || 'Emerald Luxe'}</strong></div></div><div className="support-card"><span className="support-icon"><Icon name="help" size={19}/></span><div><span className="eyebrow">ACCOUNT SUPPORT</span><h3>Live chat</h3><p>Message the Arvo administrator from your account.</p><button className="inline-link" onClick={onSupport}>Open conversation <Icon name="chevron" size={14}/></button></div></div></section><div className="profile-actions">{user.role === 'admin' && <button className="outline-button" onClick={onAdmin}><Icon name="shield" size={16}/> Open admin panel</button>}<button className="text-button" onClick={onLogout}>Sign out</button></div></>
 }
 
 function AuthModal({ initialMode = 'login', onClose, onSignedIn, notify }) {
@@ -558,7 +607,7 @@ function ContentManager({ onChanged }) {
 }
 
 function AdminPage({ notify, onRefresh }) {
-  const tabs = ['Overview', 'Deposits', 'Withdrawals', 'Applications', 'Plans', 'Users', 'Content', 'Support', 'Settings', 'Ledger']
+  const tabs = ['Overview', 'Deposits', 'Withdrawals', 'Applications', 'Plans', 'Users', 'Content', 'Support', 'Themes', 'Settings', 'Ledger']
   const [tab, setTab] = useState('Overview')
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -566,6 +615,7 @@ function AdminPage({ notify, onRefresh }) {
   const [planForm, setPlanForm] = useState({ name: '', slug: '', category: 'Investment plan', summary: '', details: '', minimum: '', riskLabel: 'See plan documents', termsUrl: '', isActive: true, imageUrl: '' })
   const [methodForm, setMethodForm] = useState({ key: '', label: '', instructions: '', active: true })
   const [settings, setSettings] = useState(null)
+  const [themeDraft, setThemeDraft] = useState('emerald')
   const [integrations, setIntegrations] = useState(null)
   const [languagesText, setLanguagesText] = useState('en')
   const [search, setSearch] = useState('')
@@ -573,10 +623,10 @@ function AdminPage({ notify, onRefresh }) {
   async function load(nextTab = tab) {
     setBusy(true); setError('')
     try {
-      const routes = { Overview: '/admin/overview', Deposits: '/admin/deposits', Withdrawals: '/admin/withdrawals', Applications: '/admin/applications', Plans: '/admin/plans', Users: `/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`, Settings: '/admin/settings', Ledger: '/admin/ledger' }
+      const routes = { Overview: '/admin/overview', Deposits: '/admin/deposits', Withdrawals: '/admin/withdrawals', Applications: '/admin/applications', Plans: '/admin/plans', Users: `/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`, Settings: '/admin/settings', Themes: '/admin/settings', Ledger: '/admin/ledger' }
       const result = await api(routes[nextTab])
       setData(result)
-      if (nextTab === 'Settings') { setSettings(result.settings); setIntegrations(result.integrations || {}); setLanguagesText((result.settings.languages || ['en']).join(', ')) }
+      if (nextTab === 'Settings' || nextTab === 'Themes') { setSettings(result.settings); setThemeDraft(result.settings.activeTheme || 'emerald'); setIntegrations(result.integrations || {}); setLanguagesText((result.settings.languages || ['en']).join(', ')) }
     } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
   useEffect(() => { if (!['Content', 'Support'].includes(tab)) load(tab) }, [tab])
@@ -626,13 +676,18 @@ function AdminPage({ notify, onRefresh }) {
     setSettings((current) => ({ ...current, paymentMethods: [...(current.paymentMethods || []), methodForm] }))
     setMethodForm({ key: '', label: '', instructions: '', active: true }); setError('')
   }
+  async function publishTheme() {
+    if (!settings || themeDraft === (settings.activeTheme || 'emerald')) return
+    await mutate('/admin/theme', 'PATCH', { activeTheme: themeDraft }, 'Live theme updated for all Arvo users')
+  }
+
   async function saveSettings() {
     if (!settings) return
     const languages = [...new Set(languagesText.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean))]
     await mutate('/admin/settings', 'PUT', { paymentMethods: settings.paymentMethods || [], languages, themeIds: settings.themeIds || themes.map((item) => item.id) }, 'Platform settings saved')
   }
 
-  const titleForTab = { Overview: 'Administration', Deposits: 'Deposit management', Withdrawals: 'Withdrawal management', Applications: 'Plan applications', Plans: 'Plan management', Users: 'Users management', Content: 'News & web management', Support: 'Live chat support', Settings: 'Platform settings', Ledger: 'Transaction log' }
+  const titleForTab = { Overview: 'Administration', Deposits: 'Deposit management', Withdrawals: 'Withdrawal management', Applications: 'Plan applications', Plans: 'Plan management', Users: 'Users management', Content: 'News & web management', Support: 'Live chat support', Themes: 'Theme management', Settings: 'Platform settings', Ledger: 'Transaction log' }
   return <><PageHeading eyebrow="ARVO CONTROL CENTRE" title={titleForTab[tab]} subtitle="Review account activity and manage published platform data."/><div className="admin-tabs">{tabs.map((item) => <button key={item} className={tab === item ? 'selected' : ''} onClick={() => setTab(item)}>{item}</button>)}</div>{busy && <div className="inline-loading">Loading…</div>}{error && <p className="form-error admin-error">{error}</p>}
     {tab === 'Overview' && data?.overview && <><div className="admin-stat-grid">{[['Users',data.overview.users],['Active users',data.overview.activeUsers],['Published plans',data.overview.plans],['Pending deposits',data.overview.pendingDeposits],['Pending withdrawals',data.overview.pendingWithdrawals],['Plan applications',data.overview.pendingApplications]].map(([label,value]) => <div className="admin-stat" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><section className="section-block"><div className="section-heading"><div><span className="eyebrow">LATEST LEDGER ENTRIES</span><h2>Recent account activity</h2></div><button className="inline-link" onClick={() => setTab('Ledger')}>Open log <Icon name="chevron" size={15}/></button></div><LedgerTable entries={data.overview.recentEntries || []}/></section></>}
     {tab === 'Deposits' && <RequestTable items={data?.deposits || []} type="deposit" onDecision={(item, decision) => mutate(`/admin/deposits/${item._id}/review`, 'PATCH', { decision }, `Deposit ${decision}ed`)}/>}
@@ -640,7 +695,8 @@ function AdminPage({ notify, onRefresh }) {
     {tab === 'Applications' && <RequestTable items={data?.applications || []} type="application" onDecision={(item, decision) => mutate(`/admin/applications/${item._id}/review`, 'PATCH', { decision }, `Application ${decision}ed`)}/>}
     {tab === 'Plans' && <div className="admin-columns"><form className="admin-form-card" onSubmit={addPlan}><span className="eyebrow">PUBLISH A PLAN</span><h3>New investment plan</h3><label>Plan name<input className="form-input" value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} required/></label><label>Slug<input className="form-input" value={planForm.slug} onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value })} placeholder="Auto-generated from name"/></label><label>Category<input className="form-input" value={planForm.category} onChange={(e) => setPlanForm({ ...planForm, category: e.target.value })}/></label><label>Short summary<textarea className="form-input" value={planForm.summary} onChange={(e) => setPlanForm({ ...planForm, summary: e.target.value })} maxLength="500"/></label><label>Plan details<textarea className="form-input" value={planForm.details} onChange={(e) => setPlanForm({ ...planForm, details: e.target.value })}/></label><label>Minimum amount (₹)<input className="form-input" value={planForm.minimum} onChange={(e) => setPlanForm({ ...planForm, minimum: e.target.value })} required inputMode="decimal"/></label><label>Risk label<input className="form-input" value={planForm.riskLabel} onChange={(e) => setPlanForm({ ...planForm, riskLabel: e.target.value })}/></label><label>Terms URL<input className="form-input" type="url" value={planForm.termsUrl} onChange={(e) => setPlanForm({ ...planForm, termsUrl: e.target.value })} placeholder="https://"/></label><div className="plan-image-field"><span className="plan-image-title">Plan image <span>(optional)</span></span><label className="plan-image-picker"><span>{planForm.imageUrl ? 'Replace plan image' : 'Choose plan image'}</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePlanImage}/></label><span className="plan-image-help">JPEG, PNG or WebP. Optimized for faster mobile loading.</span>{planForm.imageUrl && <div className="plan-image-preview"><img src={planForm.imageUrl} alt="Plan preview"/><button type="button" className="outline-button compact-button" onClick={() => setPlanForm((current) => ({ ...current, imageUrl: '' }))}>Remove image</button></div>}</div><button className="primary-button" disabled={busy}>Publish plan</button></form><div className="admin-table-card"><span className="eyebrow">CURRENT PLANS</span>{(data?.plans || []).map((plan) => <div className="admin-list-row" key={plan._id}>{plan.imageUrl && <img className="admin-plan-thumb" src={plan.imageUrl} alt=""/>}<div><strong>{plan.name}</strong><span>{formatINR(plan.minimumPaise, true)} · {plan.isActive ? 'Active' : 'Hidden'}</span></div><div className="admin-plan-actions"><label className="outline-button compact-button plan-image-change">{plan.imageUrl ? 'Change image' : 'Add image'}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => updatePlanImage(plan, event)}/></label>{plan.imageUrl && <button className="outline-button compact-button" onClick={() => mutate(`/admin/plans/${plan._id}`, 'PATCH', { ...plan, minimum: plan.minimum, imageUrl: '' }, 'Plan image removed')}>Remove</button>}<button className="outline-button compact-button" onClick={() => mutate(`/admin/plans/${plan._id}`, 'PATCH', { ...plan, minimum: plan.minimum, isActive: !plan.isActive }, plan.isActive ? 'Plan hidden' : 'Plan published')}>{plan.isActive ? 'Hide' : 'Publish'}</button></div></div>)}</div></div>}
     {tab === 'Users' && <><form className="admin-search" onSubmit={(e) => { e.preventDefault(); load('Users') }}><input className="form-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search mobile or name"/><button className="outline-button">Search</button></form><div className="admin-table-card">{(data?.users || []).map((item) => <div className="admin-user-row" key={item.id}><div><strong>{item.name || 'New member'}</strong><span>+91 {item.mobile} · {item.email || 'No email'}</span></div><StatusPill status={item.profileStatus}/><button className="outline-button compact-button" onClick={() => mutate(`/admin/users/${item.id}`, 'PATCH', { profileStatus: item.profileStatus === 'verified' ? 'pending' : 'verified' }, item.profileStatus === 'verified' ? 'Verification reset' : 'Profile verified')}>{item.profileStatus === 'verified' ? 'Reset verification' : 'Verify profile'}</button><button className="outline-button compact-button" onClick={() => mutate(`/admin/users/${item.id}`, 'PATCH', { status: item.status === 'active' ? 'blocked' : 'active' }, item.status === 'active' ? 'User blocked' : 'User activated')}>{item.status === 'active' ? 'Block' : 'Activate'}</button></div>)}</div></>}
-    {tab === 'Settings' && settings && <div className="admin-settings-grid"><section className="admin-form-card"><span className="eyebrow">DEPOSIT METHODS</span><h3>Payment instructions</h3><p>These instructions appear to users. Requests stay pending until an administrator verifies the payment outside Arvo.</p>{(settings.paymentMethods || []).map((method, index) => <div className="method-edit-row" key={`${method.key}-${index}`}><label>Label<input className="form-input" value={method.label} onChange={(e) => setSettings({ ...settings, paymentMethods: settings.paymentMethods.map((item, i) => i === index ? { ...item, label: e.target.value } : item) })}/></label><label>Instructions<textarea className="form-input" value={method.instructions} onChange={(e) => setSettings({ ...settings, paymentMethods: settings.paymentMethods.map((item, i) => i === index ? { ...item, instructions: e.target.value } : item) })}/></label><label className="checkbox-row"><input type="checkbox" checked={method.active} onChange={(e) => setSettings({ ...settings, paymentMethods: settings.paymentMethods.map((item, i) => i === index ? { ...item, active: e.target.checked } : item) })}/> Active</label><button className="text-button" onClick={() => setSettings({ ...settings, paymentMethods: settings.paymentMethods.filter((_, i) => i !== index) })}>Remove</button></div>)}<div className="method-add-form"><label>Key<input className="form-input" value={methodForm.key} onChange={(e) => setMethodForm({ ...methodForm, key: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} placeholder="upi-main"/></label><label>Display label<input className="form-input" value={methodForm.label} onChange={(e) => setMethodForm({ ...methodForm, label: e.target.value })} placeholder="UPI transfer"/></label><label>Payment instructions<textarea className="form-input" value={methodForm.instructions} onChange={(e) => setMethodForm({ ...methodForm, instructions: e.target.value })} placeholder="Add the payment details users should see"/></label><button className="outline-button" type="button" onClick={addPaymentMethod}><Icon name="plus" size={15}/> Add method</button></div><button className="primary-button" onClick={saveSettings} disabled={busy}>Save platform settings</button></section><section className="admin-form-card"><span className="eyebrow">APP THEMES</span><h3>Available themes</h3><p>All five premium themes are available to users.</p><div className="theme-admin-list">{themes.map((item) => <span key={item.id}><i style={{ background: item.colors[0] }}/>{item.name}</span>)}</div><span className="eyebrow settings-note">EMAIL SETTINGS</span><p className={integrations?.emailConfigured ? 'integration-state integration-ready' : 'integration-state'}>{integrations?.emailConfigured ? 'SMTP is configured. Email verification messages can be sent.' : 'SMTP is not configured. Add SMTP_HOST, SMTP_USER and SMTP_PASSWORD to the API environment to enable verification email.'}</p><span className="eyebrow settings-note">LANGUAGE CODES</span><label>Enabled content languages<input className="form-input" value={languagesText} onChange={(e) => setLanguagesText(e.target.value)} placeholder="en, hi"/></label><p>Use ISO language codes for content records. Add translated content for each code before publishing it.</p><button className="primary-button" onClick={saveSettings} disabled={busy}>Save platform settings</button></section></div>}
+    {tab === 'Themes' && settings && <ThemeStudio activeTheme={settings.activeTheme || 'emerald'} draftTheme={themeDraft} onSelect={setThemeDraft} onPublish={publishTheme} busy={busy}/>}
+    {tab === 'Settings' && settings && <div className="admin-settings-grid"><section className="admin-form-card"><span className="eyebrow">DEPOSIT METHODS</span><h3>Payment instructions</h3><p>These instructions appear to users. Requests stay pending until an administrator verifies the payment outside Arvo.</p>{(settings.paymentMethods || []).map((method, index) => <div className="method-edit-row" key={`${method.key}-${index}`}><label>Label<input className="form-input" value={method.label} onChange={(e) => setSettings({ ...settings, paymentMethods: settings.paymentMethods.map((item, i) => i === index ? { ...item, label: e.target.value } : item) })}/></label><label>Instructions<textarea className="form-input" value={method.instructions} onChange={(e) => setSettings({ ...settings, paymentMethods: settings.paymentMethods.map((item, i) => i === index ? { ...item, instructions: e.target.value } : item) })}/></label><label className="checkbox-row"><input type="checkbox" checked={method.active} onChange={(e) => setSettings({ ...settings, paymentMethods: settings.paymentMethods.map((item, i) => i === index ? { ...item, active: e.target.checked } : item) })}/> Active</label><button className="text-button" onClick={() => setSettings({ ...settings, paymentMethods: settings.paymentMethods.filter((_, i) => i !== index) })}>Remove</button></div>)}<div className="method-add-form"><label>Key<input className="form-input" value={methodForm.key} onChange={(e) => setMethodForm({ ...methodForm, key: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} placeholder="upi-main"/></label><label>Display label<input className="form-input" value={methodForm.label} onChange={(e) => setMethodForm({ ...methodForm, label: e.target.value })} placeholder="UPI transfer"/></label><label>Payment instructions<textarea className="form-input" value={methodForm.instructions} onChange={(e) => setMethodForm({ ...methodForm, instructions: e.target.value })} placeholder="Add the payment details users should see"/></label><button className="outline-button" type="button" onClick={addPaymentMethod}><Icon name="plus" size={15}/> Add method</button></div><button className="primary-button" onClick={saveSettings} disabled={busy}>Save platform settings</button></section><section className="admin-form-card"><span className="eyebrow">APP THEMES</span><h3>Available themes</h3><p>All users see the one theme published in the Themes tab.</p><div className="theme-admin-list">{themes.map((item) => <span key={item.id}><i style={{ background: item.colors[0] }}/>{item.name}{settings.activeTheme === item.id ? ' · Live' : ''}</span>)}</div><span className="eyebrow settings-note">EMAIL SETTINGS</span><p className={integrations?.emailConfigured ? 'integration-state integration-ready' : 'integration-state'}>{integrations?.emailConfigured ? 'SMTP is configured. Email verification messages can be sent.' : 'SMTP is not configured. Add SMTP_HOST, SMTP_USER and SMTP_PASSWORD to the API environment to enable verification email.'}</p><span className="eyebrow settings-note">LANGUAGE CODES</span><label>Enabled content languages<input className="form-input" value={languagesText} onChange={(e) => setLanguagesText(e.target.value)} placeholder="en, hi"/></label><p>Use ISO language codes for content records. Add translated content for each code before publishing it.</p><button className="primary-button" onClick={saveSettings} disabled={busy}>Save platform settings</button></section></div>}
     {tab === 'Content' && <ContentManager onChanged={onRefresh}/>}
     {tab === 'Support' && <AdminSupportPanel/>}
     {tab === 'Ledger' && <LedgerTable entries={data?.entries || []}/>}
