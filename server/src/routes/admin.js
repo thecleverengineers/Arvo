@@ -18,6 +18,7 @@ const planInput = z.object({
   termMonths: z.coerce.number().int().min(1).max(600),
   riskLabel: z.string().trim().max(80).default('See plan documents'),
   termsUrl: z.string().trim().max(1000).default(''),
+  imageUrl: z.string().max(600_000).default(''),
   isActive: z.boolean().default(true),
 })
 
@@ -27,6 +28,7 @@ function parsePlan(body) {
   const minimumPaise = toPaise(parsed.data.minimum)
   if (!minimumPaise) return { error: 'Enter a valid minimum amount in rupees.' }
   if (parsed.data.termsUrl && !/^https:\/\//i.test(parsed.data.termsUrl)) return { error: 'Plan document links must use HTTPS.' }
+  if (parsed.data.imageUrl && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(parsed.data.imageUrl)) return { error: 'Upload a valid JPEG plan image.' }
   return { data: { ...parsed.data, minimumPaise } }
 }
 

@@ -20,7 +20,7 @@ function getRequestKey(req, res) {
 }
 
 function publicPlan(plan) {
-  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, minimumPaise: plan.minimumPaise, minimum: asRupees(plan.minimumPaise), termMonths: plan.termMonths, riskLabel: plan.riskLabel, termsUrl: plan.termsUrl }
+  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, minimumPaise: plan.minimumPaise, minimum: asRupees(plan.minimumPaise), termMonths: plan.termMonths, riskLabel: plan.riskLabel, termsUrl: plan.termsUrl, imageUrl: plan.imageUrl || '' }
 }
 
 router.get('/settings', asyncRoute(async (_req, res) => {

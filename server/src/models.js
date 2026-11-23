@@ -32,6 +32,7 @@ const planSchema = new Schema({
   termMonths: { type: Number, required: true, min: 1, max: 600 },
   riskLabel: { type: String, trim: true, maxlength: 80, default: 'See plan documents' },
   termsUrl: { type: String, trim: true, maxlength: 1000, default: '' },
+  imageUrl: { type: String, maxlength: 600_000, default: '' },
   isActive: { type: Boolean, default: true, index: true },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true })

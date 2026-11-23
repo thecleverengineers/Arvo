@@ -18,7 +18,7 @@ app.disable('x-powered-by')
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false)
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }))
 app.use(cors({ origin: clientOrigin, credentials: true, methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'] }))
-app.use(express.json({ limit: '100kb' }))
+app.use(express.json({ limit: '700kb' }))
 app.use(cookieParser())
 app.use(originGuard)
 
