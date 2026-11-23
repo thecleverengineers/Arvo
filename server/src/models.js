@@ -12,6 +12,7 @@ const userSchema = new Schema({
   profileStatus: { type: String, enum: ['not_started', 'pending', 'verified', 'rejected'], default: 'not_started' },
   referralCode: { type: String, unique: true, index: true },
   referredBy: { type: String, default: '', index: true },
+  mpinHash: { type: String, default: '' },
 }, { timestamps: true })
 
 const walletSchema = new Schema({
@@ -29,6 +30,10 @@ const planSchema = new Schema({
   summary: { type: String, trim: true, maxlength: 500, default: '' },
   details: { type: String, trim: true, maxlength: 10000, default: '' },
   pricePaise: { type: Number, required: true, min: 1 },
+  cycle: { type: String, enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'one_time'], default: 'monthly' },
+  durationDays: { type: Number, min: 1, max: 36500, default: 30 },
+  investmentRoiPct: { type: Number, min: 0, max: 10000, default: 0 },
+  profitReturnPaise: { type: Number, min: 0, max: 1_000_000_000_000, default: 0 },
   riskLabel: { type: String, trim: true, maxlength: 80, default: 'See plan documents' },
   termsUrl: { type: String, trim: true, maxlength: 1000, default: '' },
   imageUrl: { type: String, maxlength: 600_000, default: '' },
@@ -38,7 +43,7 @@ const planSchema = new Schema({
 
 const otpChallengeSchema = new Schema({
   mobile: { type: String, required: true, index: true },
-  intent: { type: String, enum: ['signup', 'login'], default: 'signup', index: true },
+  intent: { type: String, enum: ['signup', 'login', 'mpin_setup', 'mpin_reset'], default: 'signup', index: true },
   mode: { type: String, enum: ['demo', 'fast2sms'], required: true },
   status: { type: String, enum: ['pending', 'verified', 'expired'], default: 'pending', index: true },
   sentAt: { type: Date, required: true },

@@ -15,6 +15,10 @@ const planInput = z.object({
   summary: z.string().trim().max(500).default(''),
   details: z.string().trim().max(10000).default(''),
   price: z.union([z.number(), z.string()]).nullable().optional(),
+  cycle: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'one_time']).default('monthly'),
+  durationDays: z.coerce.number().int().min(1).max(36500).default(30),
+  investmentRoiPct: z.coerce.number().min(0).max(10000).default(0),
+  profitReturn: z.union([z.number(), z.string()]).default(0),
   riskLabel: z.string().trim().max(80).default('See plan documents'),
   termsUrl: z.string().trim().max(1000).default(''),
   imageUrl: z.string().max(600_000).default(''),
@@ -24,8 +28,11 @@ const planInput = z.object({
 function parsePlan(body, { requirePrice = false } = {}) {
   const parsed = planInput.safeParse(body)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
-  const { price, ...planData } = parsed.data
+  const { price, profitReturn, ...planData } = parsed.data
   let pricePaise
+  const profitReturnAmount = Number(profitReturn)
+  if (!Number.isFinite(profitReturnAmount) || profitReturnAmount < 0 || profitReturnAmount > 10_000_000_000) return { error: 'Enter a valid non-negative profit return in rupees.' }
+  const profitReturnPaise = Math.round(profitReturnAmount * 100)
   if (price !== undefined && price !== null) {
     pricePaise = toPaise(price)
     if (!pricePaise) return { error: 'Enter a valid fixed price in rupees.' }
@@ -34,7 +41,7 @@ function parsePlan(body, { requirePrice = false } = {}) {
   }
   if (planData.termsUrl && !/^https:\/\//i.test(planData.termsUrl)) return { error: 'Plan document links must use HTTPS.' }
   if (planData.imageUrl && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(planData.imageUrl)) return { error: 'Upload a valid JPEG plan image.' }
-  return { data: pricePaise ? { ...planData, pricePaise } : planData }
+  return { data: { ...planData, profitReturnPaise, ...(pricePaise ? { pricePaise } : {}) } }
 }
 
 router.get('/overview', asyncRoute(async (_req, res) => {
@@ -68,7 +75,7 @@ router.patch('/users/:id', asyncRoute(async (req, res) => {
 
 router.get('/plans', asyncRoute(async (_req, res) => {
   const plans = await InvestmentPlan.find().sort({ createdAt: -1 }).lean()
-  res.json({ plans: plans.map((plan) => ({ ...plan, price: plan.pricePaise ? asRupees(plan.pricePaise) : null })) })
+  res.json({ plans: plans.map((plan) => ({ ...plan, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, profitReturn: asRupees(plan.profitReturnPaise || 0) })) })
 }))
 
 router.post('/plans', asyncRoute(async (req, res) => {
@@ -76,7 +83,7 @@ router.post('/plans', asyncRoute(async (req, res) => {
   if (parsed.error) return res.status(400).json({ error: parsed.error })
   const plan = await InvestmentPlan.create({ ...parsed.data, createdBy: req.user._id })
   await AuditLog.create({ actorId: req.user._id, action: 'plan.created', targetType: 'investmentPlan', targetId: plan._id, details: { slug: plan.slug } })
-  res.status(201).json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null } })
+  res.status(201).json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null, profitReturn: asRupees(plan.profitReturnPaise || 0) } })
 }))
 
 router.patch('/plans/:id', asyncRoute(async (req, res) => {
@@ -88,7 +95,7 @@ router.patch('/plans/:id', asyncRoute(async (req, res) => {
   if (parsed.data.isActive && !nextPricePaise) return res.status(400).json({ error: 'Set a fixed price before publishing this plan.' })
   const plan = await InvestmentPlan.findByIdAndUpdate(req.params.id, parsed.data, { new: true, runValidators: true })
   await AuditLog.create({ actorId: req.user._id, action: 'plan.updated', targetType: 'investmentPlan', targetId: plan._id, details: { slug: plan.slug } })
-  res.json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null } })
+  res.json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null, profitReturn: asRupees(plan.profitReturnPaise || 0) } })
 }))
 
 router.get('/deposits', asyncRoute(async (req, res) => {

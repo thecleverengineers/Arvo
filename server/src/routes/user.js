@@ -1,14 +1,17 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
-import { ContentItem, Deposit, EmailVerification, InvestmentPlan, LedgerEntry, PlanApplication, PlanPosition, PlatformSettings, SupportMessage, Transfer, User, Wallet, Withdrawal } from '../models.js'
+import { ContentItem, Deposit, EmailVerification, InvestmentPlan, LedgerEntry, OtpChallenge, PlanApplication, PlanPosition, PlatformSettings, SupportMessage, Transfer, User, Wallet, Withdrawal } from '../models.js'
 import { asyncRoute, requireAuth } from '../middleware.js'
 import { asRupees, ledger, toPaise, walletFor, withTransaction } from '../transactions.js'
-import { safeUser } from '../security.js'
+import { hashMpin, safeUser, verifyMpin } from '../security.js'
+import { isDemoAuth, sendOtp, verifyOtp } from '../fast2sms.js'
 
 const router = Router()
 const mobileSchema = z.string().regex(/^\d{10}$/)
 const idempotencySchema = z.string().trim().regex(/^[A-Za-z0-9._:-]{8,128}$/)
 const amountError = { error: 'Enter an amount in rupees with up to two decimal places.' }
+const mpinLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 6, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: 'Too many MPIN verification attempts. Try again later.' } })
 
 function getRequestKey(req, res) {
   const parsed = idempotencySchema.safeParse(req.get('Idempotency-Key') || '')
@@ -20,7 +23,7 @@ function getRequestKey(req, res) {
 }
 
 function publicPlan(plan) {
-  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, pricePaise: plan.pricePaise || null, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, riskLabel: plan.riskLabel, termsUrl: plan.termsUrl, imageUrl: plan.imageUrl || '' }
+  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, pricePaise: plan.pricePaise || null, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, cycle: plan.cycle || 'monthly', durationDays: plan.durationDays || 30, investmentRoiPct: plan.investmentRoiPct ?? 0, profitReturnPaise: plan.profitReturnPaise || 0, profitReturn: asRupees(plan.profitReturnPaise || 0), riskLabel: plan.riskLabel, termsUrl: plan.termsUrl, imageUrl: plan.imageUrl || '' }
 }
 
 router.get('/settings', asyncRoute(async (_req, res) => {
@@ -54,6 +57,46 @@ router.get('/content/:type', asyncRoute(async (req, res) => {
 }))
 
 router.get('/profile', requireAuth, asyncRoute(async (req, res) => res.json({ user: safeUser(req.user) })))
+
+router.post('/profile/mpin/otp', requireAuth, mpinLimiter, asyncRoute(async (req, res) => {
+  if (req.user.profileStatus !== 'verified') return res.status(403).json({ error: 'Complete profile verification before creating a withdrawal MPIN.' })
+  const intent = req.user.mpinHash ? 'mpin_reset' : 'mpin_setup'
+  const mobile = req.user.mobile
+  const now = new Date()
+  const lastMinute = new Date(now.getTime() - 60_000)
+  const hourAgo = new Date(now.getTime() - 60 * 60_000)
+  const latest = await OtpChallenge.findOne({ mobile, intent: { $in: ['mpin_setup', 'mpin_reset'] }, createdAt: { $gte: hourAgo } }).sort({ createdAt: -1 })
+  if (latest?.createdAt > lastMinute) return res.status(429).json({ error: 'Wait a minute before requesting another code.' })
+  const recentCount = await OtpChallenge.countDocuments({ mobile, createdAt: { $gte: hourAgo } })
+  if (recentCount >= 5) return res.status(429).json({ error: 'OTP request limit reached for this number. Try again later.' })
+  const mode = isDemoAuth() ? 'demo' : 'fast2sms'
+  await sendOtp(mobile)
+  const expiresAt = new Date(now.getTime() + Number(process.env.FAST2SMS_OTP_EXPIRY_MINUTES || 10) * 60_000)
+  await OtpChallenge.updateMany({ mobile, intent: { $in: ['mpin_setup', 'mpin_reset'] }, status: 'pending' }, { $set: { status: 'expired' } })
+  await OtpChallenge.create({ mobile, intent, mode, sentAt: now, expiresAt })
+  res.json({ ok: true, expiresInSeconds: Number(process.env.FAST2SMS_OTP_EXPIRY_MINUTES || 10) * 60, demoOtp: mode === 'demo' ? (process.env.DEMO_OTP || '246810') : undefined })
+}))
+
+router.post('/profile/mpin', requireAuth, mpinLimiter, asyncRoute(async (req, res) => {
+  if (req.user.profileStatus !== 'verified') return res.status(403).json({ error: 'Complete profile verification before creating a withdrawal MPIN.' })
+  const parsed = z.object({ otp: z.string().trim().regex(/^\d{4,10}$/), mpin: z.string().regex(/^\d{6}$/) }).safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ error: 'Enter the OTP and a six-digit MPIN.' })
+  const intent = req.user.mpinHash ? 'mpin_reset' : 'mpin_setup'
+  const challenge = await OtpChallenge.findOne({ mobile: req.user.mobile, intent, status: 'pending' }).sort({ createdAt: -1 })
+  if (!challenge || challenge.expiresAt < new Date()) return res.status(400).json({ error: 'This OTP has expired. Request a new code.' })
+  if (challenge.attempts >= 5) return res.status(429).json({ error: 'Too many incorrect attempts. Request a new code.' })
+  challenge.attempts += 1
+  await challenge.save()
+  let verified = false
+  try { verified = await verifyOtp(req.user.mobile, parsed.data.otp) }
+  catch (error) { return res.status(error.status || 502).json({ error: error.message || 'OTP verification failed.' }) }
+  if (!verified) return res.status(400).json({ error: 'The OTP is incorrect or expired.' })
+  const claimed = await OtpChallenge.findOneAndUpdate({ _id: challenge._id, status: 'pending' }, { $set: { status: 'verified' } }, { new: true })
+  if (!claimed) return res.status(409).json({ error: 'This OTP was already used. Request a new code.' })
+  req.user.mpinHash = await hashMpin(parsed.data.mpin)
+  await req.user.save()
+  res.json({ ok: true, user: safeUser(req.user), message: 'Withdrawal MPIN saved securely.' })
+}))
 
 router.patch('/profile', requireAuth, asyncRoute(async (req, res) => {
   const parsed = z.object({ name: z.string().trim().min(2).max(100), email: z.string().trim().email().max(254).optional().or(z.literal('')) }).safeParse(req.body)
@@ -116,9 +159,13 @@ router.post('/deposits', requireAuth, asyncRoute(async (req, res) => {
 router.post('/withdrawals', requireAuth, asyncRoute(async (req, res) => {
   const requestKey = getRequestKey(req, res)
   if (!requestKey) return
+  if (req.user.profileStatus !== 'verified') return res.status(403).json({ error: 'Profile verification is required before requesting a withdrawal.' })
+  if (!req.user.mpinHash) return res.status(409).json({ error: 'Create a withdrawal MPIN from your verified profile before requesting a withdrawal.' })
+  const mpin = String(req.body?.mpin || '').trim()
+  if (!/^\d{6}$/.test(mpin)) return res.status(400).json({ error: 'Enter your six-digit withdrawal MPIN.' })
+  if (!await verifyMpin(req.user.mpinHash, mpin)) return res.status(401).json({ error: 'The withdrawal MPIN is incorrect.' })
   const prior = await Withdrawal.findOne({ userId: req.user._id, requestKey })
   if (prior) return res.json({ withdrawal: prior, replayed: true })
-  if (req.user.profileStatus !== 'verified') return res.status(403).json({ error: 'Profile verification is required before requesting a withdrawal.' })
   const amountPaise = toPaise(req.body?.amount)
   if (!amountPaise) return res.status(400).json(amountError)
   const payoutNote = String(req.body?.payoutNote || '').trim().slice(0, 300)

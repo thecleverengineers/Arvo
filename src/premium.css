@@ -258,3 +258,35 @@ body { background: #e8e9e8; }
   .admin-plan-price { width: 100%; flex: 1 1 100%; }
   .admin-plan-row > .admin-plan-actions { flex: 1 1 100%; justify-content: flex-start; }
 }
+
+
+/* Investment terms and withdrawal MPIN flows. */
+.mpin-card { margin: 0 0 24px; padding: clamp(18px, 3vw, 28px); border: 1px solid var(--border); border-radius: var(--premium-radius); background: var(--card); box-shadow: var(--shadow); }
+.mpin-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 17px; border-bottom: 1px solid var(--border); }
+.mpin-card-heading h2 { margin: 7px 0 5px; color: var(--text); font-size: clamp(19px, 2.4vw, 25px); }
+.mpin-card-heading p, .mpin-status-line, .mpin-locked { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.mpin-card-heading p { margin: 0; }
+.mpin-content { padding-top: 16px; }
+.mpin-status-line { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.mpin-locked { display: flex; align-items: center; gap: 10px; padding: 15px 0 2px; }
+.mpin-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 17px; }
+.mpin-form label, .admin-plan-terms label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; }
+.mpin-form .primary-button { align-self: end; min-height: 43px; }
+.mpin-form .text-button { align-self: center; justify-self: start; }
+.mpin-form .demo-otp-note, .mpin-content > .form-error { grid-column: 1 / -1; margin: 0; }
+.admin-plan-terms { display: grid; grid-template-columns: repeat(4, minmax(90px, 1fr)); gap: 8px; width: 100%; flex: 1 1 100%; }
+.admin-plan-terms .form-input { min-height: 34px; padding: 0 8px; font-size: 11px; }
+.admin-plan-terms .compact-button { justify-self: start; grid-column: 1 / -1; }
+.plan-meta { flex-wrap: wrap; row-gap: 5px; }
+@media (max-width: 700px) {
+  .mpin-form { grid-template-columns: 1fr 1fr; }
+  .mpin-form label:first-child { grid-column: 1 / -1; }
+  .mpin-form .primary-button { grid-column: 1 / -1; }
+  .admin-plan-terms { grid-template-columns: 1fr 1fr; }
+  .mpin-status-line { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 395px) {
+  .mpin-form { grid-template-columns: 1fr; }
+  .mpin-form label:first-child, .mpin-form .primary-button { grid-column: auto; }
+  .admin-plan-terms { grid-template-columns: 1fr; }
+}
