@@ -3,6 +3,7 @@ const endpoint = 'https://www.fast2sms.com/dev/otp'
 function providerConfig() {
   if (!process.env.FAST2SMS_API_KEY || !process.env.FAST2SMS_OTP_ID) {
     const error = new Error('Fast2SMS is not configured. Add FAST2SMS_API_KEY and FAST2SMS_OTP_ID on the server.')
+    error.code = 'OTP_PROVIDER_NOT_CONFIGURED'
     error.status = 503
     throw error
   }
