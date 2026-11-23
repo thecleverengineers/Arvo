@@ -29,6 +29,7 @@ const iconPaths = {
   plus: <><path d="M12 5v14M5 12h14"/></>,
   swap: <><path d="m16 3 4 4-4 4M4 7h16M8 21l-4-4 4-4m12 4H4"/></>,
   close: <><path d="m18 6-12 12M6 6l12 12"/></>,
+  logout: <><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></>,
   lock: <><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>,
   help: <><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4.4 1.6c-.9 1-1.9 1.2-1.9 2.9M12 17h.01"/></>,
   list: <><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></>,
@@ -53,6 +54,7 @@ function App() {
   const [activePlan, setActivePlan] = useState(null)
   const [loginOpen, setLoginOpen] = useState(false)
   const [authMode, setAuthMode] = useState('login')
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [action, setAction] = useState(null)
   const [toast, setToast] = useState('')
   const [loading, setLoading] = useState(true)
@@ -89,6 +91,14 @@ function App() {
   useEffect(() => { if (user) loadAccountData(); else { setWallet(null); setReferrals(null) } }, [user?.id])
   useEffect(() => { localStorage.setItem('arvo-theme', theme) }, [theme])
   useEffect(() => {
+    if (!accountMenuOpen) return undefined
+    const closeOnOutside = (event) => { if (event.target instanceof Element && !event.target.closest('.account-menu-wrap')) setAccountMenuOpen(false) }
+    const closeOnEscape = (event) => { if (event.key === 'Escape') setAccountMenuOpen(false) }
+    document.addEventListener('pointerdown', closeOnOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => { document.removeEventListener('pointerdown', closeOnOutside); document.removeEventListener('keydown', closeOnEscape) }
+  }, [accountMenuOpen])
+  useEffect(() => {
     if (!brandIcon) return
     let link = document.querySelector('link[rel="icon"]')
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link) }
@@ -106,10 +116,17 @@ function App() {
   }, [])
 
   const openPlan = (plan) => { setActivePlan(plan); setPage('Plans'); window.scrollTo({ top: 0, behavior: 'smooth' }) }
-  const navigate = (nextPage) => { setPage(nextPage); setActivePlan(null); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  const navigate = (nextPage) => { setPage(nextPage); setActivePlan(null); setAccountMenuOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  const openAccountItem = (item) => {
+    setAccountMenuOpen(false)
+    if (item === 'kyc') {
+      navigate('Profile')
+      window.setTimeout(() => document.getElementById('kyc-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
+    } else navigate(item === 'settings' ? 'Settings' : 'Profile')
+  }
   const logout = async () => {
     try { await api('/auth/logout', { method: 'POST' }) } catch { /* Local session still clears. */ }
-    setUser(null); setWallet(null); setReferrals(null); setPage('Home'); notify('Signed out')
+    setAccountMenuOpen(false); setUser(null); setWallet(null); setReferrals(null); setPage('Home'); notify('Signed out')
   }
 
   async function submitPlan(plan, amount, requestKey) {
@@ -157,7 +174,17 @@ function App() {
           <button className="theme-button" onClick={() => setThemeOpen(!themeOpen)}><span className="theme-dots">{currentTheme.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span><span className="theme-button-label">{currentTheme.name}</span><span className="tiny-caret">⌄</span></button>
           {themeOpen && <div className="theme-menu">{themes.filter((item) => settings.themes?.includes(item.id)).map((item) => <button key={item.id} onClick={() => { setTheme(item.id); setThemeOpen(false) }}><span className="theme-dots">{item.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span><span>{item.name}</span>{theme === item.id && <Icon name="check" size={15}/>}</button>)}</div>}
         </div>
-        {user ? <><button className="icon-button notification-button" aria-label="Support chat" onClick={() => navigate('Support')}><Icon name="bell"/><i/></button><button className="avatar-button" onClick={() => navigate('Profile')} aria-label="Open profile">{initials(user.name)}</button></> : <button className="secondary-button top-signin" onClick={() => { setAuthMode('login'); setLoginOpen(true) }}>Sign in</button>}
+        {user ? <><button className="icon-button notification-button" aria-label="Support chat" onClick={() => navigate('Support')}><Icon name="bell"/><i/></button><div className="account-menu-wrap">
+          <button className="avatar-button" onClick={() => setAccountMenuOpen((open) => !open)} aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen}>{initials(user.name)}</button>
+          {accountMenuOpen && <div className="account-menu" role="menu" aria-label="Account menu">
+            <div className="account-menu-heading"><span className="account-menu-avatar">{initials(user.name)}</span><span><strong>{user.name || 'Arvo member'}</strong><small>+91 {user.mobile}</small></span></div>
+            <button className="account-menu-item" role="menuitem" onClick={() => openAccountItem('profile')}><Icon name="user" size={18}/>Profile</button>
+            <button className="account-menu-item" role="menuitem" onClick={() => openAccountItem('kyc')}><Icon name="shield" size={18}/>KYC &amp; verification</button>
+            <button className="account-menu-item" role="menuitem" onClick={() => openAccountItem('settings')}><Icon name="sun" size={18}/>Settings</button>
+            <div className="account-menu-separator"/>
+            <button className="account-menu-item account-menu-logout" role="menuitem" onClick={() => { setAccountMenuOpen(false); logout() }}><Icon name="logout" size={18}/>Log out</button>
+          </div>}
+        </div></> : <button className="secondary-button top-signin" onClick={() => { setAuthMode('login'); setLoginOpen(true) }}>Sign in</button>}
       </div>
     </header>
 
@@ -173,6 +200,7 @@ function App() {
         {page === 'Wallet' && <WalletPage wallet={wallet} onAction={setAction} notify={notify}/>}
         {page === 'Referrals' && <ReferralPage referrals={referrals} notify={notify}/>}
         {page === 'Profile' && <ProfilePage user={user} onSave={saveProfile} onVerify={verifyProfile} onSendEmail={sendEmailVerification} onSupport={() => navigate('Support')} onAdmin={() => navigate('Admin')} onLogout={logout} notify={notify}/>}
+        {page === 'Settings' && <SettingsPage theme={theme} onThemeChange={setTheme} availableThemes={settings.themes || themes.map((item) => item.id)}/>}
         {page === 'Support' && <SupportChat notify={notify}/>}
         {page === 'Admin' && user.role === 'admin' && <AdminPage notify={notify} onRefresh={async () => { await loadPublicData(); await loadAccountData() }}/>}
       </>}
@@ -270,6 +298,23 @@ function ReferralPage({ referrals, notify }) {
   return <><PageHeading eyebrow="GROW TOGETHER" title="Your referral circle" subtitle="Review account referrals across the three configured levels."/><section className="referral-hero"><div className="referral-copy"><span className="eyebrow">YOUR INVITE CODE</span><h2>Good things are<br/>better shared.</h2><p>Share your code with someone joining Arvo.</p><div className="invite-code"><span>{referrals?.referralCode || '—'}</span><button onClick={copyCode} aria-label="Copy invite code"><Icon name="copy" size={17}/></button></div></div><div className="referral-illustration"><div className="referral-ring ring-a"/><div className="referral-ring ring-b"/><div className="referral-center">A</div><span className="referral-node node-one">1</span><span className="referral-node node-two">2</span><span className="referral-node node-three">3</span><span className="referral-node node-four">+</span></div></section><section className="referral-stats"><div><span className="eyebrow">TOTAL NETWORK</span><strong>{referrals?.totalMembers || 0}</strong><span>across three levels</span></div><div><span className="eyebrow">LEVEL 1</span><strong>{levels[0]?.count || 0}</strong><span>direct referrals</span></div><div><span className="eyebrow">LEVEL 2 + 3</span><strong>{(levels[1]?.count || 0) + (levels[2]?.count || 0)}</strong><span>extended network</span></div></section><section className="section-block"><div className="section-heading"><div><span className="eyebrow">THREE LEVELS</span><h2>Referral breakdown</h2></div></div><div className="level-list">{levels.map((level) => <div className="level-card" key={level.level}><span className={`level-icon ${['level-green','level-gold','level-blue'][(level.level - 1) % 3]}`}><Icon name="users" size={19}/></span><div className="level-content"><strong>Level {level.level}</strong><span>{level.level === 1 ? 'People you invited directly' : `Referrals through level ${level.level - 1}`}</span></div><div className="level-people"><strong>{level.count} members</strong><span>tracked accounts</span></div><span className="level-rate"><Icon name="chevron" size={17}/></span></div>)}</div></section><div className="demo-note"><span className="demo-mark">i</span><span>Referral tracking follows the three-level account tree. Reward or commission rules are not enabled in this build.</span></div></>
 }
 
+function SettingsPage({ theme, onThemeChange, availableThemes }) {
+  const choices = themes.filter((item) => availableThemes?.includes(item.id))
+  return <>
+    <PageHeading eyebrow="PERSONALIZE ARVO" title="Settings" subtitle="Choose the appearance that feels right for your account."/>
+    <section className="settings-panel">
+      <div className="settings-panel-heading"><span className="eyebrow">APPEARANCE</span><h2>Choose a theme</h2><p>Your selection is saved on this device.</p></div>
+      <div className="settings-theme-grid">
+        {choices.map((item) => <button key={item.id} className={`settings-theme-card ${theme === item.id ? 'selected' : ''}`} onClick={() => onThemeChange(item.id)} aria-pressed={theme === item.id}>
+          <span className="settings-theme-preview">{item.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span>
+          <span className="settings-theme-name"><strong>{item.name}</strong><small>{theme === item.id ? 'Currently selected' : 'Tap to apply'}</small></span>
+          {theme === item.id && <Icon name="check" size={18}/>}
+        </button>)}
+      </div>
+    </section>
+  </>
+}
+
 function ProfilePage({ user, onSave, onVerify, onSendEmail, onSupport, onAdmin, onLogout, notify }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(user.name || '')
@@ -277,7 +322,7 @@ function ProfilePage({ user, onSave, onVerify, onSendEmail, onSupport, onAdmin, 
   const [busy, setBusy] = useState(false)
   async function save(event) { event.preventDefault(); setBusy(true); try { await onSave({ name, email }); setEditing(false) } catch (error) { notify(error.message) } finally { setBusy(false) } }
   async function run(action) { setBusy(true); try { await action() } catch (error) { notify(error.message) } finally { setBusy(false) } }
-  return <><PageHeading eyebrow="YOUR ARVO ACCOUNT" title="Profile & verification" subtitle="Manage your account details and verification status."/><section className="profile-card"><div className="profile-avatar">{initials(user.name)}</div><div className="profile-details"><span className="eyebrow">{user.role === 'admin' ? 'ADMINISTRATOR' : 'ARVO MEMBER'}</span><h2>{user.name || 'Arvo member'}</h2><p>+91 {user.mobile} {user.email ? `· ${user.email}` : ''}</p></div><button className="outline-button profile-edit" onClick={() => setEditing(!editing)}>{editing ? 'Close' : 'Edit profile'}</button></section>{editing && <form className="profile-edit-form" onSubmit={save}><label>Name<input className="form-input" value={name} onChange={(e) => setName(e.target.value)} required minLength="2"/></label><label>Email<input className="form-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)}/></label><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></form>}<section className="verification-section"><div className="section-heading"><div><span className="eyebrow">ACCOUNT SECURITY</span><h2>Verification status</h2></div></div><div className="verification-list"><div className="verification-row"><span className={`verification-icon ${user.emailVerified ? 'verified' : 'pending'}`}><Icon name={user.emailVerified ? 'check' : 'user'} size={18}/></span><div><strong>Email address</strong><span>{user.email || 'No email address added'}</span></div>{user.emailVerified ? <StatusPill status="verified"/> : <button className="inline-link" disabled={busy || !user.email} onClick={() => run(onSendEmail)}>Verify email <Icon name="chevron" size={14}/></button>}</div><div className="verification-row"><span className={`verification-icon ${user.profileStatus === 'verified' ? 'verified' : 'pending'}`}><Icon name={user.profileStatus === 'verified' ? 'check' : 'user'} size={18}/></span><div><strong>Profile verification</strong><span>{user.profileStatus === 'verified' ? 'Your profile is verified' : 'Submit your profile for administrator review'}</span></div>{user.profileStatus === 'verified' ? <StatusPill status="verified"/> : user.profileStatus === 'pending' ? <StatusPill status="pending"/> : <button className="inline-link" disabled={busy} onClick={() => run(onVerify)}>Submit <Icon name="chevron" size={14}/></button>}</div><div className="verification-row"><span className="verification-icon verified"><Icon name="check" size={18}/></span><div><strong>Mobile number</strong><span>+91 {user.mobile}</span></div><StatusPill status="verified"/></div></div></section><section className="profile-bottom-grid"><div className="preferences-card"><span className="eyebrow">PREFERENCES</span><h3>Your experience</h3><div className="preference-row"><span>Language</span><strong>English</strong></div><div className="preference-row"><span>Appearance</span><strong>{themes.find((item) => item.id === localStorage.getItem('arvo-theme'))?.name || 'Emerald Luxe'}</strong></div></div><div className="support-card"><span className="support-icon"><Icon name="help" size={19}/></span><div><span className="eyebrow">ACCOUNT SUPPORT</span><h3>Live chat</h3><p>Message the Arvo administrator from your account.</p><button className="inline-link" onClick={onSupport}>Open conversation <Icon name="chevron" size={14}/></button></div></div></section><div className="profile-actions">{user.role === 'admin' && <button className="outline-button" onClick={onAdmin}><Icon name="shield" size={16}/> Open admin panel</button>}<button className="text-button" onClick={onLogout}>Sign out</button></div></>
+  return <><PageHeading eyebrow="YOUR ARVO ACCOUNT" title="Profile & verification" subtitle="Manage your account details and verification status."/><section className="profile-card" id="profile-details"><div className="profile-avatar">{initials(user.name)}</div><div className="profile-details"><span className="eyebrow">{user.role === 'admin' ? 'ADMINISTRATOR' : 'ARVO MEMBER'}</span><h2>{user.name || 'Arvo member'}</h2><p>+91 {user.mobile} {user.email ? `· ${user.email}` : ''}</p></div><button className="outline-button profile-edit" onClick={() => setEditing(!editing)}>{editing ? 'Close' : 'Edit profile'}</button></section>{editing && <form className="profile-edit-form" onSubmit={save}><label>Name<input className="form-input" value={name} onChange={(e) => setName(e.target.value)} required minLength="2"/></label><label>Email<input className="form-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)}/></label><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></form>}<section className="verification-section" id="kyc-section"><div className="section-heading"><div><span className="eyebrow">ACCOUNT SECURITY</span><h2>Verification status</h2></div></div><div className="verification-list"><div className="verification-row"><span className={`verification-icon ${user.emailVerified ? 'verified' : 'pending'}`}><Icon name={user.emailVerified ? 'check' : 'user'} size={18}/></span><div><strong>Email address</strong><span>{user.email || 'No email address added'}</span></div>{user.emailVerified ? <StatusPill status="verified"/> : <button className="inline-link" disabled={busy || !user.email} onClick={() => run(onSendEmail)}>Verify email <Icon name="chevron" size={14}/></button>}</div><div className="verification-row"><span className={`verification-icon ${user.profileStatus === 'verified' ? 'verified' : 'pending'}`}><Icon name={user.profileStatus === 'verified' ? 'check' : 'user'} size={18}/></span><div><strong>Profile verification</strong><span>{user.profileStatus === 'verified' ? 'Your profile is verified' : 'Submit your profile for administrator review'}</span></div>{user.profileStatus === 'verified' ? <StatusPill status="verified"/> : user.profileStatus === 'pending' ? <StatusPill status="pending"/> : <button className="inline-link" disabled={busy} onClick={() => run(onVerify)}>Submit <Icon name="chevron" size={14}/></button>}</div><div className="verification-row"><span className="verification-icon verified"><Icon name="check" size={18}/></span><div><strong>Mobile number</strong><span>+91 {user.mobile}</span></div><StatusPill status="verified"/></div></div></section><section className="profile-bottom-grid"><div className="preferences-card"><span className="eyebrow">PREFERENCES</span><h3>Your experience</h3><div className="preference-row"><span>Language</span><strong>English</strong></div><div className="preference-row"><span>Appearance</span><strong>{themes.find((item) => item.id === localStorage.getItem('arvo-theme'))?.name || 'Emerald Luxe'}</strong></div></div><div className="support-card"><span className="support-icon"><Icon name="help" size={19}/></span><div><span className="eyebrow">ACCOUNT SUPPORT</span><h3>Live chat</h3><p>Message the Arvo administrator from your account.</p><button className="inline-link" onClick={onSupport}>Open conversation <Icon name="chevron" size={14}/></button></div></div></section><div className="profile-actions">{user.role === 'admin' && <button className="outline-button" onClick={onAdmin}><Icon name="shield" size={16}/> Open admin panel</button>}<button className="text-button" onClick={onLogout}>Sign out</button></div></>
 }
 
 function AuthModal({ initialMode = 'login', onClose, onSignedIn, notify }) {
