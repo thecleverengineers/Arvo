@@ -52,6 +52,7 @@ function App() {
   const [brandIcon, setBrandIcon] = useState('')
   const [activePlan, setActivePlan] = useState(null)
   const [loginOpen, setLoginOpen] = useState(false)
+  const [authMode, setAuthMode] = useState('login')
   const [action, setAction] = useState(null)
   const [toast, setToast] = useState('')
   const [loading, setLoading] = useState(true)
@@ -156,15 +157,15 @@ function App() {
           <button className="theme-button" onClick={() => setThemeOpen(!themeOpen)}><span className="theme-dots">{currentTheme.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span><span className="theme-button-label">{currentTheme.name}</span><span className="tiny-caret">⌄</span></button>
           {themeOpen && <div className="theme-menu">{themes.filter((item) => settings.themes?.includes(item.id)).map((item) => <button key={item.id} onClick={() => { setTheme(item.id); setThemeOpen(false) }}><span className="theme-dots">{item.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span><span>{item.name}</span>{theme === item.id && <Icon name="check" size={15}/>}</button>)}</div>}
         </div>
-        {user ? <><button className="icon-button notification-button" aria-label="Support chat" onClick={() => navigate('Support')}><Icon name="bell"/><i/></button><button className="avatar-button" onClick={() => navigate('Profile')} aria-label="Open profile">{initials(user.name)}</button></> : <button className="secondary-button top-signin" onClick={() => setLoginOpen(true)}>Sign in</button>}
+        {user ? <><button className="icon-button notification-button" aria-label="Support chat" onClick={() => navigate('Support')}><Icon name="bell"/><i/></button><button className="avatar-button" onClick={() => navigate('Profile')} aria-label="Open profile">{initials(user.name)}</button></> : <button className="secondary-button top-signin" onClick={() => { setAuthMode('login'); setLoginOpen(true) }}>Sign in</button>}
       </div>
     </header>
 
     <main className="main-content">
       {loading ? <div className="loading-state"><span className="loading-mark">A</span><span>Preparing your Arvo experience…</span></div> : !user ? <>
         {page === 'Plans' && !activePlan && <PlansPage plans={plans} onOpenPlan={openPlan}/>}
-        {page !== 'Plans' && <SignedOutPage plans={plans} onSignIn={() => setLoginOpen(true)} onBrowse={() => navigate('Plans')} onOpenPlan={openPlan}/>}
-        {activePlan && <PlanDetail plan={activePlan} onBack={() => setActivePlan(null)} signedOut onSignIn={() => setLoginOpen(true)}/>}
+        {page !== 'Plans' && <SignedOutPage plans={plans} onSignIn={() => { setAuthMode('login'); setLoginOpen(true) }} onSignUp={() => { setAuthMode('signup'); setLoginOpen(true) }} onBrowse={() => navigate('Plans')} onOpenPlan={openPlan}/>}
+        {activePlan && <PlanDetail plan={activePlan} onBack={() => setActivePlan(null)} signedOut onSignIn={() => { setAuthMode('login'); setLoginOpen(true) }}/>}
       </> : <>
         {page === 'Home' && !activePlan && <HomePage user={user} wallet={wallet} referrals={referrals} plans={plans} news={news} onOpenPlan={openPlan} setPage={navigate} notify={notify}/>}
         {page === 'Plans' && !activePlan && <PlansPage plans={plans} onOpenPlan={openPlan}/>}
@@ -178,7 +179,7 @@ function App() {
     </main>
 
     {user && <nav className="bottom-nav" aria-label="Main navigation">{navItems.map(([label, icon]) => <button key={label} className={`nav-item ${page === label ? 'active' : ''}`} onClick={() => navigate(label)}><Icon name={icon} size={20}/><span>{label}</span></button>)}</nav>}
-    {loginOpen && <AuthModal onClose={() => setLoginOpen(false)} notify={notify} onSignedIn={(nextUser) => { setUser(nextUser); setLoginOpen(false); setPage('Home') }}/>}
+    {loginOpen && <AuthModal initialMode={authMode} onClose={() => setLoginOpen(false)} notify={notify} onSignedIn={(nextUser) => { setUser(nextUser); setLoginOpen(false); setPage('Home') }}/>}
     {action && <WalletActionModal type={action} methods={settings.paymentMethods || []} onClose={() => setAction(null)} onSubmit={submitWalletAction} notify={notify}/>}
     {toast && <div className="toast"><span className="toast-check"><Icon name="check" size={14}/></span>{toast}</div>}
   </div>
@@ -193,8 +194,8 @@ function PageHeading({ eyebrow, title, subtitle, action }) { return <div classNa
 function EmptyState({ title, description, action }) { return <div className="empty-state"><span className="empty-icon"><Icon name="layers" size={22}/></span><h3>{title}</h3><p>{description}</p>{action}</div> }
 function StatusPill({ status }) { const label = status?.replaceAll('_', ' ') || 'pending'; return <span className={`status-pill state-${label.replaceAll(' ', '-')}`}>{label}</span> }
 
-function SignedOutPage({ plans, onSignIn, onBrowse, onOpenPlan }) {
-  return <div className="signed-out-page"><section className="signed-out-copy"><span className="eyebrow">WEALTH, THOUGHTFULLY</span><h1>A clearer view of your financial journey<span className="greeting-dot">.</span></h1><p>Explore available plans, manage requests and keep your account details in one considered place.</p><div className="signed-out-actions"><button className="primary-button" onClick={onSignIn}>Continue with mobile OTP <Icon name="chevron" size={17}/></button><button className="text-button" onClick={onBrowse}>Explore plans</button></div><div className="trust-note"><Icon name="lock" size={16}/> Secure access with mobile verification</div></section><aside className="signed-out-panel"><div className="signed-panel-top"><span className="brand-mark">A</span><span className="eyebrow">ARVO ACCOUNT</span></div><div className="signed-panel-orbit"><span/><span/><strong>A</strong></div><div className="signed-panel-foot"><span>Personal dashboard</span><span>Plans · Wallet · Referrals</span></div></aside><section className="public-plans-preview"><div className="section-heading"><div><span className="eyebrow">EXPLORE ARVO</span><h2>Available investment plans</h2></div><button className="inline-link" onClick={onBrowse}>View plans <Icon name="chevron" size={15}/></button></div>{plans.length ? <div className="plan-grid home-plans">{plans.slice(0, 2).map((plan, index) => <PlanCard plan={plan} index={index} key={plan.id} onOpen={onOpenPlan}/>)}</div> : <p className="muted-line">Plans will appear here when published by the administrator.</p>}</section></div>
+function SignedOutPage({ plans, onSignIn, onSignUp, onBrowse, onOpenPlan }) {
+  return <div className="signed-out-page"><section className="signed-out-copy"><span className="eyebrow">WEALTH, THOUGHTFULLY</span><h1>A clearer view of your financial journey<span className="greeting-dot">.</span></h1><p>Explore available plans, manage requests and keep your account details in one considered place.</p><div className="signed-out-actions"><button className="primary-button" onClick={onSignUp}>Create your Arvo account <Icon name="chevron" size={17}/></button><button className="text-button" onClick={onBrowse}>Explore plans</button><button className="text-button" onClick={onSignIn}>Already a member? Sign in</button></div><div className="trust-note"><Icon name="lock" size={16}/> Secure access with mobile verification</div></section><aside className="signed-out-panel"><div className="signed-panel-top"><span className="brand-mark">A</span><span className="eyebrow">ARVO ACCOUNT</span></div><div className="signed-panel-orbit"><span/><span/><strong>A</strong></div><div className="signed-panel-foot"><span>Personal dashboard</span><span>Plans · Wallet · Referrals</span></div></aside><section className="public-plans-preview"><div className="section-heading"><div><span className="eyebrow">EXPLORE ARVO</span><h2>Available investment plans</h2></div><button className="inline-link" onClick={onBrowse}>View plans <Icon name="chevron" size={15}/></button></div>{plans.length ? <div className="plan-grid home-plans">{plans.slice(0, 2).map((plan, index) => <PlanCard plan={plan} index={index} key={plan.id} onOpen={onOpenPlan}/>)}</div> : <p className="muted-line">Plans will appear here when published by the administrator.</p>}</section></div>
 }
 
 function PlanCard({ plan, onOpen, compact = false, index = 0 }) {
@@ -273,7 +274,8 @@ function ProfilePage({ user, onSave, onVerify, onSendEmail, onSupport, onAdmin, 
   return <><PageHeading eyebrow="YOUR ARVO ACCOUNT" title="Profile & verification" subtitle="Manage your account details and verification status."/><section className="profile-card"><div className="profile-avatar">{initials(user.name)}</div><div className="profile-details"><span className="eyebrow">{user.role === 'admin' ? 'ADMINISTRATOR' : 'ARVO MEMBER'}</span><h2>{user.name || 'Arvo member'}</h2><p>+91 {user.mobile} {user.email ? `· ${user.email}` : ''}</p></div><button className="outline-button profile-edit" onClick={() => setEditing(!editing)}>{editing ? 'Close' : 'Edit profile'}</button></section>{editing && <form className="profile-edit-form" onSubmit={save}><label>Name<input className="form-input" value={name} onChange={(e) => setName(e.target.value)} required minLength="2"/></label><label>Email<input className="form-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)}/></label><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></form>}<section className="verification-section"><div className="section-heading"><div><span className="eyebrow">ACCOUNT SECURITY</span><h2>Verification status</h2></div></div><div className="verification-list"><div className="verification-row"><span className={`verification-icon ${user.emailVerified ? 'verified' : 'pending'}`}><Icon name={user.emailVerified ? 'check' : 'user'} size={18}/></span><div><strong>Email address</strong><span>{user.email || 'No email address added'}</span></div>{user.emailVerified ? <StatusPill status="verified"/> : <button className="inline-link" disabled={busy || !user.email} onClick={() => run(onSendEmail)}>Verify email <Icon name="chevron" size={14}/></button>}</div><div className="verification-row"><span className={`verification-icon ${user.profileStatus === 'verified' ? 'verified' : 'pending'}`}><Icon name={user.profileStatus === 'verified' ? 'check' : 'user'} size={18}/></span><div><strong>Profile verification</strong><span>{user.profileStatus === 'verified' ? 'Your profile is verified' : 'Submit your profile for administrator review'}</span></div>{user.profileStatus === 'verified' ? <StatusPill status="verified"/> : user.profileStatus === 'pending' ? <StatusPill status="pending"/> : <button className="inline-link" disabled={busy} onClick={() => run(onVerify)}>Submit <Icon name="chevron" size={14}/></button>}</div><div className="verification-row"><span className="verification-icon verified"><Icon name="check" size={18}/></span><div><strong>Mobile number</strong><span>+91 {user.mobile}</span></div><StatusPill status="verified"/></div></div></section><section className="profile-bottom-grid"><div className="preferences-card"><span className="eyebrow">PREFERENCES</span><h3>Your experience</h3><div className="preference-row"><span>Language</span><strong>English</strong></div><div className="preference-row"><span>Appearance</span><strong>{themes.find((item) => item.id === localStorage.getItem('arvo-theme'))?.name || 'Emerald Luxe'}</strong></div></div><div className="support-card"><span className="support-icon"><Icon name="help" size={19}/></span><div><span className="eyebrow">ACCOUNT SUPPORT</span><h3>Live chat</h3><p>Message the Arvo administrator from your account.</p><button className="inline-link" onClick={onSupport}>Open conversation <Icon name="chevron" size={14}/></button></div></div></section><div className="profile-actions">{user.role === 'admin' && <button className="outline-button" onClick={onAdmin}><Icon name="shield" size={16}/> Open admin panel</button>}<button className="text-button" onClick={onLogout}>Sign out</button></div></>
 }
 
-function AuthModal({ onClose, onSignedIn, notify }) {
+function AuthModal({ initialMode = 'login', onClose, onSignedIn, notify }) {
+  const [flow, setFlow] = useState(initialMode)
   const [mobile, setMobile] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -284,21 +286,93 @@ function AuthModal({ onClose, onSignedIn, notify }) {
   const [busy, setBusy] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState('')
-  useEffect(() => { if (!seconds) return undefined; const timer = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000); return () => window.clearInterval(timer) }, [seconds])
-  async function send(event) {
-    event.preventDefault(); setBusy(true); setError('')
-    try { const result = await api('/auth/otp/send', { method: 'POST', body: { mobile } }); setOtpSent(true); setDemoOtp(result.demoOtp || ''); setSeconds(60); notify(result.demoOtp ? `Local preview OTP: ${result.demoOtp}` : 'OTP sent') }
-    catch (err) { setError(err.message) } finally { setBusy(false) }
-  }
-  async function verify(event) {
-    event.preventDefault(); setBusy(true); setError('')
-    try { const result = await api('/auth/otp/verify', { method: 'POST', body: { mobile, otp, name, email, referralCode } }); onSignedIn(result.user); notify(`Welcome to Arvo, ${result.user.name || 'member'}`) }
-    catch (err) { setError(err.message) } finally { setBusy(false) }
-  }
-  async function resend() { if (seconds || busy) return; setBusy(true); setError(''); try { const result = await api('/auth/otp/send', { method: 'POST', body: { mobile } }); setDemoOtp(result.demoOtp || ''); setSeconds(60); notify('A new code has been sent') } catch (err) { setError(err.message) } finally { setBusy(false) } }
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><div className="login-modal"><button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close"/></button><span className="brand-mark modal-brand-mark">A</span><span className="eyebrow">WELCOME TO ARVO</span><h2>{otpSent ? 'Verify your number' : 'A more considered way forward.'}</h2><p>{otpSent ? `Enter the one-time code sent to +91 ${mobile}.` : 'Sign in or create your account with a secure mobile OTP.'}</p>{!otpSent ? <form onSubmit={send} className="auth-form"><label className="field-label" htmlFor="auth-name">Name <span className="optional-label">Required for new accounts</span></label><input className="form-input" id="auth-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" minLength="2"/><label className="field-label" htmlFor="auth-phone">Mobile number</label><div className="phone-field"><span>+91</span><input id="auth-phone" value={mobile} onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="98765 43210" inputMode="numeric" required pattern="[0-9]{10}"/></div><label className="field-label" htmlFor="auth-email">Email address <span className="optional-label">Optional</span></label><input className="form-input" id="auth-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"/><label className="field-label" htmlFor="auth-referral">Referral code <span className="optional-label">Optional</span></label><input className="form-input" id="auth-referral" value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} placeholder="ARVO••••••••"/><button className="primary-button full-button" disabled={busy}>{busy ? 'Sending…' : 'Send secure OTP'} <Icon name="chevron" size={17}/></button></form> : <form onSubmit={verify} className="auth-form"><label className="field-label" htmlFor="auth-otp">One-time password</label><input className="form-input otp-entry" id="auth-otp" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code" required/><label className="field-label" htmlFor="auth-name-confirm">Name <span className="optional-label">Required for new accounts</span></label><input className="form-input" id="auth-name-confirm" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" minLength="2"/><button className="primary-button full-button" disabled={busy || otp.length < 4}>{busy ? 'Verifying…' : 'Verify and continue'} <Icon name="chevron" size={17}/></button><button className="text-button centered" type="button" onClick={resend} disabled={busy || seconds > 0}>{seconds ? `Resend code in ${seconds}s` : 'Resend code'}</button>{demoOtp && <p className="demo-otp-note">Local demo mode code: <strong>{demoOtp}</strong></p>}</form>}{error && <p className="form-error">{error}</p>}<div className="modal-security"><Icon name="lock" size={14}/> Your verification code is handled securely.</div></div></div>
-}
+  const isSignup = flow === 'signup'
 
+  useEffect(() => { if (!seconds) return undefined; const timer = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000); return () => window.clearInterval(timer) }, [seconds])
+
+  function switchFlow(next) {
+    setFlow(next)
+    setOtpSent(false)
+    setOtp('')
+    setDemoOtp('')
+    setSeconds(0)
+    setError('')
+  }
+
+  async function send(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      const result = await api('/auth/otp/send', { method: 'POST', body: { mobile, intent: flow } })
+      setOtpSent(true)
+      setDemoOtp(result.demoOtp || '')
+      setSeconds(60)
+      notify(result.demoOtp ? 'Local preview OTP: ' + result.demoOtp : 'OTP sent')
+    } catch (err) { setError(err.message) } finally { setBusy(false) }
+  }
+
+  async function verify(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const details = isSignup ? { name, email, referralCode } : {}
+    try {
+      const result = await api('/auth/otp/verify', { method: 'POST', body: { mobile, otp, intent: flow, ...details } })
+      onSignedIn(result.user)
+      notify('Welcome to Arvo, ' + (result.user.name || 'member'))
+    } catch (err) { setError(err.message) } finally { setBusy(false) }
+  }
+
+  async function resend() {
+    if (seconds || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await api('/auth/otp/send', { method: 'POST', body: { mobile, intent: flow } })
+      setDemoOtp(result.demoOtp || '')
+      setSeconds(60)
+      notify('A new code has been sent')
+    } catch (err) { setError(err.message) } finally { setBusy(false) }
+  }
+
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="login-modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
+      <span className="brand-mark modal-brand-mark">A</span>
+      <span className="eyebrow">{isSignup ? 'WELCOME TO ARVO' : 'WELCOME BACK'}</span>
+      <h2 id="auth-title">{otpSent ? 'Verify your number' : isSignup ? 'A more considered way forward.' : 'Your Arvo account, securely.'}</h2>
+      <p>{otpSent ? 'Enter the one-time code sent to +91 ' + mobile + '.' : isSignup ? 'Create your account with a secure mobile OTP.' : 'Enter your mobile number to receive a secure login OTP.'}</p>
+
+      {!otpSent ? <form onSubmit={send} className="auth-form">
+        {isSignup && <>
+          <label className="field-label" htmlFor="auth-name">Name <span className="optional-label">Required for new accounts</span></label>
+          <input className="form-input" id="auth-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" minLength="2" required autoComplete="name"/>
+        </>}
+        <label className="field-label" htmlFor="auth-phone">Mobile number</label>
+        <div className="phone-field"><span>+91</span><input id="auth-phone" value={mobile} onChange={(event) => setMobile(event.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="98765 43210" inputMode="numeric" autoComplete="tel-national" required pattern="[0-9]{10}"/></div>
+        {isSignup && <>
+          <label className="field-label" htmlFor="auth-email">Email address <span className="optional-label">Optional</span></label>
+          <input className="form-input" id="auth-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="email"/>
+          <label className="field-label" htmlFor="auth-referral">Referral code <span className="optional-label">Optional</span></label>
+          <input className="form-input" id="auth-referral" value={referralCode} onChange={(event) => setReferralCode(event.target.value.toUpperCase())} placeholder="ARVO••••••••" autoCapitalize="characters"/>
+        </>}
+        <button className="primary-button full-button" disabled={busy || mobile.length !== 10 || (isSignup && name.trim().length < 2)}>{busy ? 'Sending…' : 'Send secure OTP'} <Icon name="chevron" size={17}/></button>
+      </form> : <form onSubmit={verify} className="auth-form">
+        <label className="field-label" htmlFor="auth-otp">One-time password</label>
+        <input className="form-input otp-entry" id="auth-otp" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code" required autoFocus/>
+        <button className="primary-button full-button" disabled={busy || otp.length < 4}>{busy ? 'Verifying…' : 'Verify and ' + (isSignup ? 'create account' : 'log in')} <Icon name="chevron" size={17}/></button>
+        <button className="text-button centered" type="button" onClick={resend} disabled={busy || seconds > 0}>{seconds ? 'Resend code in ' + seconds + 's' : 'Resend code'}</button>
+        <button className="text-button centered" type="button" onClick={() => { setOtpSent(false); setOtp(''); setError('') }}>Change mobile number</button>
+        {demoOtp && <p className="demo-otp-note">Local demo mode code: <strong>{demoOtp}</strong></p>}
+      </form>}
+
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {!otpSent && <div className="auth-mode-switch">{isSignup ? 'Already have an account?' : 'New to Arvo?'} <button type="button" onClick={() => switchFlow(isSignup ? 'login' : 'signup')}>{isSignup ? 'Sign in' : 'Create an account'}</button></div>}
+      <div className="modal-security"><Icon name="lock" size={14}/> Your verification code is handled securely.</div>
+    </div>
+  </div>
+}
 function WalletActionModal({ type, methods, onClose, onSubmit, notify }) {
   const [amount, setAmount] = useState('')
   const [requestKey, setRequestKey] = useState(newRequestKey)
