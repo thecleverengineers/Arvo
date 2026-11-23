@@ -123,6 +123,7 @@ const platformSettingsSchema = new Schema({
   paymentMethods: [{ key: String, label: String, instructions: String, active: { type: Boolean, default: false } }],
   languages: [{ type: String }],
   themeIds: [{ type: String }],
+  activeTheme: { type: String, enum: ['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'], default: 'emerald' },
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true })
 
