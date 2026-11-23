@@ -1,4 +1,8 @@
-const API_BASE = import.meta.env.VITE_API_URL || '/api'
+// Use one deployment variable for either the full /api endpoint or Render's service root.
+const configuredBase = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
+const API_BASE = configuredBase
+  ? (configuredBase.endsWith('/api') ? configuredBase : `${configuredBase}/api`)
+  : '/api'
 
 export class ApiError extends Error {
   constructor(message, status) {
