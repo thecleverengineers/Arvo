@@ -51,3 +51,75 @@ Plans are managed in the admin panel. They have no default return figures or ref
 The content manager supports separate language codes per item, but the application interface currently ships in English. Add reviewed translations before offering other interface languages. Support chat persists messages in MongoDB and polls for replies while the chat screen is open.
 
 The app has a basic operational MVP; live SMS, SMTP, MongoDB and payment accounts still require their own credentials and provider-side setup. App data are stored in MongoDB after it is configured.
+
+
+## Premium themes and administrator publication
+
+Arvo includes five fully separated mobile visual themes:
+**Emerald Luxe**, **Obsidian Gold**, **Ivory Champagne**,
+**Midnight Sapphire**, and **Burgundy Rose**.
+
+The entire app uses one **globally active** theme stored in
+`PlatformSettings.activeTheme` in MongoDB (default: `emerald`).
+Members cannot override the live theme. Authenticated administrators
+can visit **Admin → Themes**, select one of five mobile phone previews,
+then click **Publish live theme**. The selection is applied immediately
+to the API, saved to the audit log, and picked up on subsequent client
+reloads, tab focus, or an automatic 60-second poll.
+
+- `GET /api/settings` returns `activeTheme` and public settings.
+- `PATCH /api/admin/theme` accepts
+  `{ "activeTheme": "emerald" | "obsidian" | "ivory" | "sapphire" | "burgundy" }`.
+- Publication requires a valid admin session and records a
+  `theme.published` audit event.
+- Theme palette and mock screen previews are in `src/premium.css`;
+  components and the publisher UI are in `src/App.jsx`.
+- The previews use **illustrative, not account, balance figures**.
+  Actual application balances are always loaded from the API.
+
+## Connect Vercel frontend and Render API
+
+**Frontend (Vercel)**: deploy this repository's root as a **Vite** app.
+Use `npm ci` and `npm run build`, output directory `dist`.
+
+Set this Vercel environment variable in **Production** (and appropriate Preview):
+
+```env
+VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com
+```
+
+The frontend automatically appends `/api`; an existing `/api` suffix
+is also accepted. As Vite bakes this value into the static build,
+redeploy after changing it.
+
+**API (Render)**: deploy the `server` directory with
+`npm ci` (build command) and `npm start` (start command).
+Set the following in the Render environment, using your real values:
+
+```env
+NODE_ENV=production
+MONGODB_URI=<Atlas replica-set SRV connection string>
+JWT_SECRET=<secret string with at least 32 characters>
+CLIENT_ORIGIN=https://YOUR-VERCEL-FRONTEND.vercel.app
+AUTH_MODE=fast2sms
+FAST2SMS_API_KEY=<Render secret>
+FAST2SMS_OTP_ID=<your OTP template ID>
+ADMIN_MOBILE=<your designated administrator's 10-digit mobile>
+```
+
+Do **not** put database credentials, JWT keys, or Fast2SMS credentials
+in the Vercel frontend. The `CLIENT_ORIGIN` value must match the
+frontend's exact browser origin (protocol and host, without a path).
+The API uses cross-origin credentialed requests for session cookies.
+Configure HTTPS for both services; cross-site browser policies may
+require a same-origin proxy for reliably persistent sessions.
+
+Verify `GET https://YOUR-RENDER-SERVICE.onrender.com/api/health`
+returns `{ "ok": true, "service": "arvo-api" }`, then test mobile OTP
+login, profile, published theme, and user wallet requests from the
+actual frontend domain. The health endpoint verifies that the Express
+app started, **not** every Fast2SMS or downstream database operation.
+
+A GitHub Actions verification workflow at
+`.github/workflows/verify.yml` checks the Vite production build and
+syntax of API source files on pushes to `main`.
