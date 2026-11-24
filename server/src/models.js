@@ -12,6 +12,7 @@ const userSchema = new Schema({
   profileStatus: { type: String, enum: ['not_started', 'pending', 'verified', 'rejected'], default: 'not_started' },
   referralCode: { type: String, unique: true, index: true },
   referredBy: { type: String, default: '', index: true },
+  passwordHash: { type: String, default: '', select: false },
   mpinHash: { type: String, default: '' },
 }, { timestamps: true })
 
@@ -43,12 +44,20 @@ const planSchema = new Schema({
 
 const otpChallengeSchema = new Schema({
   mobile: { type: String, required: true, index: true },
-  intent: { type: String, enum: ['signup', 'login', 'mpin_setup', 'mpin_reset'], default: 'signup', index: true },
+  intent: { type: String, enum: ['signup', 'login', 'mpin_setup', 'mpin_reset', 'password_reset'], default: 'signup', index: true },
   mode: { type: String, enum: ['demo', 'fast2sms'], required: true },
   status: { type: String, enum: ['pending', 'verified', 'expired'], default: 'pending', index: true },
   sentAt: { type: Date, required: true },
   expiresAt: { type: Date, required: true, index: { expires: 0 } },
   attempts: { type: Number, default: 0 },
+}, { timestamps: true })
+
+const captchaChallengeSchema = new Schema({
+  tokenHash: { type: String, required: true, unique: true, index: true },
+  answerHash: { type: String, required: true },
+  attempts: { type: Number, default: 0 },
+  consumedAt: { type: Date, default: null },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } },
 }, { timestamps: true })
 
 const emailVerificationSchema = new Schema({
@@ -165,6 +174,7 @@ export const User = model('User', userSchema)
 export const Wallet = model('Wallet', walletSchema)
 export const InvestmentPlan = model('InvestmentPlan', planSchema)
 export const OtpChallenge = model('OtpChallenge', otpChallengeSchema)
+export const CaptchaChallenge = model('CaptchaChallenge', captchaChallengeSchema)
 export const EmailVerification = model('EmailVerification', emailVerificationSchema)
 export const Deposit = model('Deposit', depositSchema)
 export const Withdrawal = model('Withdrawal', withdrawalSchema)

@@ -39,9 +39,13 @@ function Icon({ name, size = 20, strokeWidth = 1.7 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{iconPaths[name] || iconPaths.spark}</svg>
 }
 
+function pageFromLocation() {
+  return ({ login: 'Login', register: 'Register', 'password-reset': 'PasswordReset' }[new URLSearchParams(window.location.search).get('page')] || 'Home')
+}
+
 function App() {
   const [user, setUser] = useState(null)
-  const [page, setPage] = useState('Home')
+  const [page, setPage] = useState(pageFromLocation)
   // The administrator publishes one theme for everyone; clients only read it.
   const [theme, setTheme] = useState('emerald')
   const [plans, setPlans] = useState([])
@@ -52,8 +56,6 @@ function App() {
   const [brandLogo, setBrandLogo] = useState('')
   const [brandIcon, setBrandIcon] = useState('')
   const [activePlan, setActivePlan] = useState(null)
-  const [loginOpen, setLoginOpen] = useState(false)
-  const [authMode, setAuthMode] = useState('login')
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [action, setAction] = useState(null)
   const [toast, setToast] = useState('')
@@ -92,6 +94,15 @@ function App() {
   }, [])
 
   useEffect(() => { if (user) loadAccountData(); else { setWallet(null); setReferrals(null) } }, [user?.id])
+  useEffect(() => {
+    const onPopState = () => {
+      setPage(pageFromLocation())
+      setActivePlan(null)
+      setAccountMenuOpen(false)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
   // Keep an already-open app in sync when the administrator publishes a theme.
   useEffect(() => {
     let alive = true
@@ -137,7 +148,16 @@ function App() {
   }, [])
 
   const openPlan = (plan) => { setActivePlan(plan); setPage('Plans'); window.scrollTo({ top: 0, behavior: 'smooth' }) }
-  const navigate = (nextPage) => { setPage(nextPage); setActivePlan(null); setAccountMenuOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  const navigate = (nextPage) => {
+    const routeKeys = { Login: 'login', Register: 'register', PasswordReset: 'password-reset' }
+    const params = new URLSearchParams(window.location.search)
+    if (routeKeys[nextPage]) params.set('page', routeKeys[nextPage])
+    else if (params.has('page')) { params.delete('page'); params.delete('ref') }
+    const query = params.toString()
+    const nextUrl = window.location.pathname + (query ? '?' + query : '')
+    if (window.location.pathname + window.location.search !== nextUrl) window.history.pushState({}, '', nextUrl)
+    setPage(nextPage); setActivePlan(null); setAccountMenuOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
   const openAccountItem = (item) => {
     setAccountMenuOpen(false)
     if (item === 'kyc') {
@@ -212,15 +232,17 @@ function App() {
             <div className="account-menu-separator"/>
             <button className="account-menu-item account-menu-logout" role="menuitem" onClick={() => { setAccountMenuOpen(false); logout() }}><Icon name="logout" size={18}/>Log out</button>
           </div>}
-        </div></> : <button className="secondary-button top-signin" onClick={() => { setAuthMode('login'); setLoginOpen(true) }}>Sign in</button>}
+        </div></> : <button className="secondary-button top-signin" onClick={() => navigate('Login')}>Sign in</button>}
       </div>
     </header>
 
     <main className="main-content">
       {loading ? <div className="loading-state"><span className="loading-mark">A</span><span>Preparing your Arvo experience…</span></div> : !user ? <>
-        {page === 'Plans' && !activePlan && <PlansPage plans={plans} onOpenPlan={openPlan}/>}
-        {page !== 'Plans' && <SignedOutPage plans={plans} onSignIn={() => { setAuthMode('login'); setLoginOpen(true) }} onSignUp={() => { setAuthMode('signup'); setLoginOpen(true) }} onBrowse={() => navigate('Plans')} onOpenPlan={openPlan}/>}
-        {activePlan && <PlanDetail plan={activePlan} onBack={() => setActivePlan(null)} signedOut onSignIn={() => { setAuthMode('login'); setLoginOpen(true) }}/>}
+        {['Login', 'Register', 'PasswordReset'].includes(page) ? <AuthPage mode={page} onNavigate={navigate} onSignedIn={(nextUser) => { setUser(nextUser); navigate('Home') }} notify={notify}/> : <>
+          {page === 'Plans' && !activePlan && <PlansPage plans={plans} onOpenPlan={openPlan}/>}
+          {page !== 'Plans' && <SignedOutPage plans={plans} onSignIn={() => navigate('Login')} onSignUp={() => navigate('Register')} onBrowse={() => navigate('Plans')} onOpenPlan={openPlan}/>}
+          {activePlan && <PlanDetail plan={activePlan} onBack={() => setActivePlan(null)} signedOut onSignIn={() => navigate('Login')}/>}
+        </>}
       </> : <>
         {page === 'Home' && !activePlan && <HomePage user={user} wallet={wallet} referrals={referrals} plans={plans} news={news} onOpenPlan={openPlan} setPage={navigate} notify={notify}/>}
         {page === 'Plans' && !activePlan && <PlansPage plans={plans} onOpenPlan={openPlan}/>}
@@ -235,7 +257,7 @@ function App() {
     </main>
 
     {user && <nav className="bottom-nav" aria-label="Main navigation">{navItems.map(([label, icon]) => <button key={label} className={`nav-item ${page === label ? 'active' : ''}`} onClick={() => navigate(label)}><Icon name={icon} size={20}/><span>{label}</span></button>)}</nav>}
-    {loginOpen && <AuthModal initialMode={authMode} onClose={() => setLoginOpen(false)} notify={notify} onSignedIn={(nextUser) => { setUser(nextUser); setLoginOpen(false); setPage('Home') }}/>}
+
     {action && <WalletActionModal type={action} user={user} methods={settings.paymentMethods || []} onClose={() => setAction(null)} onSubmit={submitWalletAction} notify={notify}/>}
     {toast && <div className="toast"><span className="toast-check"><Icon name="check" size={14}/></span>{toast}</div>}
   </div>
@@ -447,105 +469,172 @@ function MpinManager({ user, onSendOtp, onSave, notify }) {
   return <section className="mpin-card" id="withdrawal-mpin"><div className="mpin-card-heading"><div><span className="eyebrow">WITHDRAWAL SECURITY</span><h2>6-digit MPIN</h2><p>Use this PIN to confirm every withdrawal request.</p></div>{user.mpinSet && user.profileStatus === 'verified' && <StatusPill status="verified"/>}</div>{user.profileStatus !== 'verified' ? <div className="mpin-locked"><Icon name="lock" size={18}/><span>Complete KYC verification before creating a withdrawal MPIN.</span></div> : <div className="mpin-content"><div className="mpin-status-line"><span>{user.mpinSet ? 'A withdrawal MPIN is active for this account.' : 'Create an MPIN to protect withdrawal requests.'}</span>{!sent && <button className="outline-button compact-button" onClick={sendCode} disabled={busy}>{busy ? 'Sending…' : user.mpinSet ? 'Reset with OTP' : 'Create with OTP'}</button>}</div>{sent && <form className="mpin-form" onSubmit={saveMpin}><label>Verification code<input className="form-input" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit OTP" inputMode="numeric" autoComplete="one-time-code" required/></label><label>New MPIN<input className="form-input" type="password" value={mpin} onChange={(event) => setMpin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6 digits" inputMode="numeric" autoComplete="new-password" required/></label><label>Confirm MPIN<input className="form-input" type="password" value={confirm} onChange={(event) => setConfirm(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Repeat your MPIN" inputMode="numeric" autoComplete="new-password" required/></label><button className="primary-button" disabled={busy || otp.length < 4 || mpin.length !== 6 || confirm.length !== 6}>{busy ? 'Saving…' : user.mpinSet ? 'Reset MPIN' : 'Save MPIN'}</button><button type="button" className="text-button" onClick={() => { setSent(false); setError(''); setOtp('') }}>Cancel</button>{demoOtp && <p className="demo-otp-note">Local demo mode code: <strong>{demoOtp}</strong></p>}</form>}{error && <p className="form-error" role="alert">{error}</p>}</div>}</section>
 }
 
-function AuthModal({ initialMode = 'login', onClose, onSignedIn, notify }) {
-  const [flow, setFlow] = useState(initialMode)
+function AuthPage({ mode = 'Login', onNavigate, onSignedIn, notify }) {
+  const isRegister = mode === 'Register'
+  const isReset = mode === 'PasswordReset'
   const [mobile, setMobile] = useState('')
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [referralCode, setReferralCode] = useState(new URLSearchParams(window.location.search).get('ref') || '')
+  const [captcha, setCaptcha] = useState(null)
+  const [captchaAnswer, setCaptchaAnswer] = useState('')
   const [otp, setOtp] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [demoOtp, setDemoOtp] = useState('')
   const [busy, setBusy] = useState(false)
-  const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState('')
-  const isSignup = flow === 'signup'
 
-  useEffect(() => { if (!seconds) return undefined; const timer = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000); return () => window.clearInterval(timer) }, [seconds])
-
-  function switchFlow(next) {
-    setFlow(next)
-    setOtpSent(false)
-    setOtp('')
-    setDemoOtp('')
-    setSeconds(0)
-    setError('')
+  async function refreshCaptcha() {
+    setCaptchaAnswer('')
+    try {
+      const challenge = await api('/auth/captcha')
+      setCaptcha(challenge)
+    } catch (err) {
+      setCaptcha(null)
+      setError(err.message || 'Could not load the numeric CAPTCHA. Refresh and try again.')
+    }
   }
 
-  async function send(event) {
+  useEffect(() => { refreshCaptcha() }, [])
+
+  async function submitAuth(event) {
     event.preventDefault()
-    setBusy(true)
     setError('')
+    if (isRegister && password !== confirmPassword) {
+      setError('Your passwords do not match.')
+      return
+    }
+    if (!captcha?.challengeId) {
+      setError('Refresh the numeric CAPTCHA before continuing.')
+      return
+    }
+    setBusy(true)
     try {
-      const result = await api('/auth/otp/send', { method: 'POST', body: { mobile, intent: flow } })
+      const result = await api(isRegister ? '/auth/register' : '/auth/login', {
+        method: 'POST',
+        body: {
+          mobile,
+          password,
+          ...(isRegister ? { confirmPassword, referralCode } : {}),
+          captchaChallengeId: captcha.challengeId,
+          captchaAnswer,
+        },
+      })
+      onSignedIn(result.user)
+      notify(isRegister ? 'Your Arvo account is ready.' : 'Welcome back to Arvo.')
+    } catch (err) {
+      setError(err.message)
+      await refreshCaptcha()
+    } finally { setBusy(false) }
+  }
+
+  async function sendResetCode(event) {
+    event.preventDefault()
+    setError('')
+    if (!captcha?.challengeId) {
+      setError('Refresh the numeric CAPTCHA before continuing.')
+      return
+    }
+    setBusy(true)
+    try {
+      const result = await api('/auth/password/reset/send', {
+        method: 'POST',
+        body: { mobile, captchaChallengeId: captcha.challengeId, captchaAnswer },
+      })
       setOtpSent(true)
       setDemoOtp(result.demoOtp || '')
-      setSeconds(60)
-      notify(result.demoOtp ? 'Local preview OTP: ' + result.demoOtp : 'OTP sent')
-    } catch (err) { setError(err.message) } finally { setBusy(false) }
+      notify(result.demoOtp ? 'Preview code: ' + result.demoOtp : 'If an account exists, a recovery code has been sent.')
+      await refreshCaptcha()
+    } catch (err) {
+      setError(err.message)
+      await refreshCaptcha()
+    } finally { setBusy(false) }
   }
 
-  async function verify(event) {
+  async function resetPassword(event) {
     event.preventDefault()
-    setBusy(true)
     setError('')
-    const details = isSignup ? { name, email, referralCode } : {}
+    if (password !== confirmPassword) {
+      setError('Your passwords do not match.')
+      return
+    }
+    setBusy(true)
     try {
-      const result = await api('/auth/otp/verify', { method: 'POST', body: { mobile, otp, intent: flow, ...details } })
+      const result = await api('/auth/password/reset', { method: 'POST', body: { mobile, otp, password } })
       onSignedIn(result.user)
-      notify('Welcome to Arvo, ' + (result.user.name || 'member'))
+      notify('Your password has been updated.')
     } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
 
-  async function resend() {
-    if (seconds || busy) return
-    setBusy(true)
-    setError('')
-    try {
-      const result = await api('/auth/otp/send', { method: 'POST', body: { mobile, intent: flow } })
-      setDemoOtp(result.demoOtp || '')
-      setSeconds(60)
-      notify('A new code has been sent')
-    } catch (err) { setError(err.message) } finally { setBusy(false) }
-  }
+  const heading = isRegister ? 'Create your Arvo account' : isReset ? otpSent ? 'Choose a new password' : 'Recover your account' : 'Sign in to Arvo'
+  const description = isRegister
+    ? 'Set up your account with a password and a quick numeric verification.'
+    : isReset
+      ? otpSent ? 'Enter the SMS code and choose a new password.' : 'Verify your mobile number to set or reset your password.'
+      : 'Use your mobile number and password to continue.'
 
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-    <div className="login-modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-      <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
-      <span className="brand-mark modal-brand-mark">A</span>
-      <span className="eyebrow">{isSignup ? 'WELCOME TO ARVO' : 'WELCOME BACK'}</span>
-      <h2 id="auth-title">{otpSent ? 'Verify your number' : isSignup ? 'A more considered way forward.' : 'Your Arvo account, securely.'}</h2>
-      <p>{otpSent ? 'Enter the one-time code sent to +91 ' + mobile + '.' : isSignup ? 'Create your account with a secure mobile OTP.' : 'Enter your mobile number to receive a secure login OTP.'}</p>
+  return <section className="auth-page" aria-labelledby="auth-title">
+    <div className="auth-card">
+      <div className="auth-card-brand"><span className="brand-mark">A</span><span className="brand-word">arvo<span>.</span></span></div>
+      <span className="eyebrow">{isRegister ? 'WELCOME TO ARVO' : isReset ? 'ACCOUNT RECOVERY' : 'WELCOME BACK'}</span>
+      <h1 id="auth-title">{heading}</h1>
+      <p className="auth-intro">{description}</p>
 
-      {!otpSent ? <form onSubmit={send} className="auth-form">
-        {isSignup && <>
-          <label className="field-label" htmlFor="auth-name">Name <span className="optional-label">Required for new accounts</span></label>
-          <input className="form-input" id="auth-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" minLength="2" required autoComplete="name"/>
-        </>}
+      {isReset ? !otpSent ? <form onSubmit={sendResetCode} className="auth-form">
         <label className="field-label" htmlFor="auth-phone">Mobile number</label>
         <div className="phone-field"><span>+91</span><input id="auth-phone" value={mobile} onChange={(event) => setMobile(event.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="98765 43210" inputMode="numeric" autoComplete="tel-national" required pattern="[0-9]{10}"/></div>
-        {isSignup && <>
-          <label className="field-label" htmlFor="auth-email">Email address <span className="optional-label">Optional</span></label>
-          <input className="form-input" id="auth-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="email"/>
+        <CaptchaField captcha={captcha} answer={captchaAnswer} onAnswer={setCaptchaAnswer} onRefresh={refreshCaptcha} disabled={busy}/>
+        <button className="primary-button full-button" disabled={busy || mobile.length !== 10 || captchaAnswer.length !== 6}>{busy ? 'Sending code…' : 'Send recovery code'} <Icon name="chevron" size={17}/></button>
+      </form> : <form onSubmit={resetPassword} className="auth-form">
+        <div className="auth-mobile-note">Recovery code sent to <strong>+91 {mobile}</strong></div>
+        <label className="field-label" htmlFor="auth-reset-otp">SMS verification code</label>
+        <input className="form-input" id="auth-reset-otp" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="Enter code" inputMode="numeric" autoComplete="one-time-code" required/>
+        <label className="field-label" htmlFor="auth-password">New password</label>
+        <input className="form-input" id="auth-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" autoComplete="new-password" minLength="8" maxLength="128" required/>
+        <label className="field-label" htmlFor="auth-confirm-password">Confirm new password</label>
+        <input className="form-input" id="auth-confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Enter the password again" autoComplete="new-password" minLength="8" maxLength="128" required/>
+        {demoOtp && <p className="demo-otp-note">Preview mode code: <strong>{demoOtp}</strong></p>}
+        <button className="primary-button full-button" disabled={busy || otp.length < 4 || password.length < 8}>{busy ? 'Updating…' : 'Reset password and sign in'} <Icon name="chevron" size={17}/></button>
+        <button className="text-button centered" type="button" onClick={() => { setOtpSent(false); setOtp(''); setDemoOtp(''); setError('') }}>Change mobile number</button>
+      </form> : <form onSubmit={submitAuth} className="auth-form">
+        <label className="field-label" htmlFor="auth-phone">Mobile number</label>
+        <div className="phone-field"><span>+91</span><input id="auth-phone" value={mobile} onChange={(event) => setMobile(event.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="98765 43210" inputMode="numeric" autoComplete="tel-national" required pattern="[0-9]{10}"/></div>
+        <label className="field-label" htmlFor="auth-password">Password</label>
+        <input className="form-input" id="auth-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isRegister ? 'Create a password' : 'Your password'} autoComplete={isRegister ? 'new-password' : 'current-password'} minLength={isRegister ? 8 : 1} maxLength="128" required/>
+        {isRegister && <>
+          <label className="field-label" htmlFor="auth-confirm-password">Confirm password</label>
+          <input className="form-input" id="auth-confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Enter your password again" autoComplete="new-password" minLength="8" maxLength="128" required/>
           <label className="field-label" htmlFor="auth-referral">Referral code <span className="optional-label">Optional</span></label>
-          <input className="form-input" id="auth-referral" value={referralCode} onChange={(event) => setReferralCode(event.target.value.toUpperCase())} placeholder="ARVO••••••••" autoCapitalize="characters"/>
+          <input className="form-input" id="auth-referral" value={referralCode} onChange={(event) => setReferralCode(event.target.value.toUpperCase())} placeholder="Enter referral code" autoCapitalize="characters"/>
         </>}
-        <button className="primary-button full-button" disabled={busy || mobile.length !== 10 || (isSignup && name.trim().length < 2)}>{busy ? 'Sending…' : 'Send secure OTP'} <Icon name="chevron" size={17}/></button>
-      </form> : <form onSubmit={verify} className="auth-form">
-        <label className="field-label" htmlFor="auth-otp">One-time password</label>
-        <input className="form-input otp-entry" id="auth-otp" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code" required autoFocus/>
-        <button className="primary-button full-button" disabled={busy || otp.length < 4}>{busy ? 'Verifying…' : 'Verify and ' + (isSignup ? 'create account' : 'log in')} <Icon name="chevron" size={17}/></button>
-        <button className="text-button centered" type="button" onClick={resend} disabled={busy || seconds > 0}>{seconds ? 'Resend code in ' + seconds + 's' : 'Resend code'}</button>
-        <button className="text-button centered" type="button" onClick={() => { setOtpSent(false); setOtp(''); setError('') }}>Change mobile number</button>
-        {demoOtp && <p className="demo-otp-note">Local demo mode code: <strong>{demoOtp}</strong></p>}
+        <CaptchaField captcha={captcha} answer={captchaAnswer} onAnswer={setCaptchaAnswer} onRefresh={refreshCaptcha} disabled={busy}/>
+        <button className="primary-button full-button" disabled={busy || mobile.length !== 10 || password.length < (isRegister ? 8 : 1) || (isRegister && confirmPassword.length < 8) || captchaAnswer.length !== 6}>{busy ? isRegister ? 'Creating account…' : 'Signing in…' : isRegister ? 'Create account' : 'Sign in'} <Icon name="chevron" size={17}/></button>
       </form>}
 
       {error && <p className="form-error" role="alert">{error}</p>}
-      {!otpSent && <div className="auth-mode-switch">{isSignup ? 'Already have an account?' : 'New to Arvo?'} <button type="button" onClick={() => switchFlow(isSignup ? 'login' : 'signup')}>{isSignup ? 'Sign in' : 'Create an account'}</button></div>}
-      <div className="modal-security"><Icon name="lock" size={14}/> Your verification code is handled securely.</div>
+      <div className="auth-mode-switch">
+        {isReset ? <>Remembered your password? <button type="button" onClick={() => onNavigate('Login')}>Sign in</button></> :
+          isRegister ? <>Already have an account? <button type="button" onClick={() => onNavigate('Login')}>Sign in</button></> :
+            <>New to Arvo? <button type="button" onClick={() => onNavigate('Register')}>Create an account</button></>}
+      </div>
+      {!isReset && !isRegister && <button className="text-button centered auth-forgot-link" type="button" onClick={() => onNavigate('PasswordReset')}>Forgot or set password</button>}
+      <div className="auth-security"><Icon name="lock" size={14}/> Your account details are protected.</div>
     </div>
+  </section>
+}
+
+function CaptchaField({ captcha, answer, onAnswer, onRefresh, disabled }) {
+  return <div className="captcha-field">
+    <span className="field-label">Numeric CAPTCHA</span>
+    <div className="captcha-image-row">
+      {captcha?.image ? <img src={captcha.image} alt="Six digit numeric CAPTCHA"/> : <div className="captcha-placeholder">Loading verification…</div>}
+      <button className="captcha-refresh" type="button" onClick={onRefresh} disabled={disabled} aria-label="Refresh numeric CAPTCHA">↻ <span>Refresh</span></button>
+    </div>
+    <label className="field-label" htmlFor="auth-captcha-answer">Enter the 6 digits shown</label>
+    <input className="form-input captcha-answer" id="auth-captcha-answer" value={answer} onChange={(event) => onAnswer(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Six-digit code" inputMode="numeric" autoComplete="off" pattern="[0-9]{6}" required/>
   </div>
 }
+
 function WalletActionModal({ type, user, methods, onClose, onSubmit, notify }) {
   const [amount, setAmount] = useState('')
   const [requestKey, setRequestKey] = useState(newRequestKey)

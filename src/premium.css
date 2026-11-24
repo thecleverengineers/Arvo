@@ -290,3 +290,75 @@ body { background: #e8e9e8; }
   .mpin-form label:first-child, .mpin-form .primary-button { grid-column: auto; }
   .admin-plan-terms { grid-template-columns: 1fr; }
 }
+
+
+/* Dedicated password sign-in, registration and recovery pages. */
+.auth-page {
+  width: min(100%, 720px);
+  min-height: calc(100dvh - 190px);
+  margin: 12px auto 42px;
+  padding: 18px 0 42px;
+  display: grid;
+  place-items: center;
+}
+.auth-card {
+  width: min(100%, 530px);
+  padding: clamp(23px, 5vw, 42px);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.035);
+}
+.auth-card-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 26px;
+}
+.auth-card-brand .brand-word { color: var(--text); }
+.auth-card > .eyebrow { display: block; margin-bottom: 9px; }
+.auth-card h1 {
+  margin: 0;
+  font-size: clamp(27px, 5vw, 38px);
+  line-height: 1.08;
+  letter-spacing: -.055em;
+  font-weight: 760;
+}
+.auth-intro { margin: 11px 0 27px; color: var(--muted); line-height: 1.55; font-size: 14px; }
+.auth-form { display: grid; gap: 10px; }
+.auth-form .field-label { margin: 5px 0 0; font-size: 12px; font-weight: 700; color: var(--text); }
+.auth-form .form-input,.auth-form .phone-field { min-height: 54px; border-radius: 14px; }
+.auth-form .phone-field { display: flex; align-items: center; gap: 12px; padding: 0 16px; border: 1px solid var(--border); background: var(--card-soft); }
+.auth-form .phone-field > span { color: var(--muted); border-right: 1px solid var(--border); padding-right: 12px; font-size: 14px; }
+.auth-form .phone-field input { flex: 1; min-width: 0; border: 0; outline: 0; color: var(--text); background: transparent; font: inherit; }
+.auth-form .form-input { width: 100%; padding: 0 16px; border: 1px solid var(--border); color: var(--text); background: var(--card-soft); font: inherit; outline: 0; }
+.auth-form .form-input:focus,.auth-form .phone-field:focus-within { border-color: var(--accent-strong); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent); }
+.auth-form .form-input::placeholder,.auth-form .phone-field input::placeholder { color: var(--muted); opacity: .75; }
+.auth-form .full-button { width: 100%; min-height: 54px; margin-top: 9px; justify-content: center; }
+.auth-form .optional-label { color: var(--muted); font-weight: 500; }
+.captcha-field { display: grid; gap: 9px; margin-top: 8px; }
+.captcha-image-row { min-height: 64px; display: flex; align-items: center; gap: 12px; }
+.captcha-image-row img { display: block; width: 200px; max-width: 60%; height: 58px; object-fit: contain; border: 1px solid var(--border); border-radius: 12px; background: #f1f5f2; }
+.captcha-placeholder { height: 58px; width: 200px; max-width: 60%; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 12px; color: var(--muted); font-size: 11px; }
+.captcha-refresh { min-height: 42px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-soft); color: var(--text); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.captcha-refresh:disabled { opacity: .55; cursor: wait; }
+.auth-form .captcha-answer { letter-spacing: .2em; font-variant-numeric: tabular-nums; }
+.auth-mode-switch { margin: 24px 0 0; color: var(--muted); text-align: center; font-size: 13px; }
+.auth-mode-switch button { margin-left: 5px; padding: 0; border: 0; background: transparent; color: var(--accent-strong); font: inherit; font-weight: 800; cursor: pointer; }
+.auth-forgot-link { margin: 12px auto 0; }
+.auth-security { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 25px; color: var(--muted); font-size: 11px; }
+.auth-security svg { flex: 0 0 auto; }
+.auth-mobile-note { padding: 12px 14px; border-radius: 12px; color: var(--muted); background: var(--card-soft); font-size: 12px; }
+.auth-mobile-note strong { color: var(--text); }
+.auth-card .form-error { margin: 14px 0 0; }
+@media (max-width: 640px) {
+  .auth-page { width: 100%; min-height: calc(100dvh - 140px); margin: 0 auto; padding: 12px 0 30px; align-items: start; }
+  .auth-card { width: 100%; padding: 25px 20px 24px; border-radius: 23px; }
+  .auth-card-brand { margin-bottom: 23px; }
+  .auth-intro { margin-bottom: 22px; }
+  .auth-form { gap: 8px; }
+  .auth-form .field-label { margin-top: 8px; }
+  .captcha-image-row img,.captcha-placeholder { width: 190px; }
+  .captcha-refresh { padding: 0 10px; }
+}

@@ -21,6 +21,21 @@ export function hashToken(value) {
   return crypto.createHash('sha256').update(value).digest('hex')
 }
 
+export async function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex')
+  const derived = await scrypt(password, salt, 64)
+  return `${salt}:${derived.toString('hex')}`
+}
+
+export async function verifyPassword(stored, password) {
+  if (typeof stored !== 'string') return false
+  const [salt, encoded] = stored.split(':')
+  if (!/^[a-f0-9]{32}$/.test(salt || '') || !/^[a-f0-9]{128}$/.test(encoded || '')) return false
+  const expected = Buffer.from(encoded, 'hex')
+  const actual = await scrypt(password, salt, expected.length)
+  return crypto.timingSafeEqual(expected, actual)
+}
+
 export async function hashMpin(mpin) {
   const salt = crypto.randomBytes(16).toString('hex')
   const derived = await scrypt(mpin, salt, 64)
