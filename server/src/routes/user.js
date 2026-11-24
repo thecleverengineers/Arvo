@@ -168,7 +168,13 @@ router.post('/withdrawals', requireAuth, asyncRoute(async (req, res) => {
   if (prior) return res.json({ withdrawal: prior, replayed: true })
   const amountPaise = toPaise(req.body?.amount)
   if (!amountPaise) return res.status(400).json(amountError)
+  const payoutNetwork = String(req.body?.payoutNetwork || '').trim()
+  const payoutAddress = String(req.body?.payoutAddress || '').trim()
   const payoutNote = String(req.body?.payoutNote || '').trim().slice(0, 300)
+  const networks = ['TRC20', 'ERC20', 'BEP20', 'Polygon']
+  if (!networks.includes(payoutNetwork)) return res.status(400).json({ error: 'Choose a supported USDT network.' })
+  const addressPattern = payoutNetwork === 'TRC20' ? /^T[1-9A-HJ-NP-Za-km-z]{33}$/ : /^0x[a-fA-F0-9]{40}$/
+  if (!addressPattern.test(payoutAddress)) return res.status(400).json({ error: payoutNetwork === 'TRC20' ? 'Enter a valid TRC20 address.' : 'Enter a valid EVM address for this network.' })
   const withdrawal = await withTransaction(async (session) => {
     const priorInTransaction = await Withdrawal.findOne({ userId: req.user._id, requestKey }).session(session)
     if (priorInTransaction) return priorInTransaction
@@ -181,7 +187,7 @@ router.post('/withdrawals', requireAuth, asyncRoute(async (req, res) => {
     wallet.availablePaise -= amountPaise
     wallet.reservedPaise += amountPaise
     await wallet.save({ session })
-    const [created] = await Withdrawal.create([{ userId: req.user._id, requestKey, amountPaise, payoutNote }], { session })
+    const [created] = await Withdrawal.create([{ userId: req.user._id, requestKey, amountPaise, payoutNetwork, payoutAddress, payoutNote }], { session })
     await ledger(session, { userId: req.user._id, kind: 'withdrawal_hold', direction: 'debit', amountPaise, status: 'reserved', referenceType: 'withdrawal', referenceId: created._id, description: 'Withdrawal request reserved' })
     return created
   })

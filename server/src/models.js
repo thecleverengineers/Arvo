@@ -83,6 +83,8 @@ const withdrawalSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   requestKey: { type: String, required: true },
   amountPaise: { type: Number, required: true, min: 1 },
+  payoutNetwork: { type: String, enum: ['TRC20', 'ERC20', 'BEP20', 'Polygon'], required: true },
+  payoutAddress: { type: String, trim: true, maxlength: 180, required: true },
   payoutNote: { type: String, trim: true, maxlength: 300, default: '' },
   status: { type: String, enum: ['pending', 'approved', 'paid', 'rejected'], default: 'pending', index: true },
   reviewedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
