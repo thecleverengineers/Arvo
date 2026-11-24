@@ -393,7 +393,7 @@ function PlanCard({ plan, onOpen, compact = false, index = 0, wallet }) {
   const limit = Math.max(1, Number(plan.purchaseLimit) || 2)
   const used = Math.max(0, Number(wallet?.planUsage?.[plan.id] || 0))
   const reachedLimit = used >= limit
-  const availability = plan.comingSoon ? 'Coming soon' : reachedLimit ? 'Limit reached' : 'Buy now'
+  const availability = plan.comingSoon ? 'Coming soon' : !plan.termsReady ? 'Terms pending' : reachedLimit ? 'Limit reached' : 'Buy now'
   return <button type="button" className={`plan-card ${compact ? 'plan-card-compact' : ''}`} onClick={() => onOpen(plan)}>
     <div className={`plan-art ${tint} ${plan.imageUrl ? 'has-image' : ''}`}>{plan.imageUrl ? <img className="plan-art-image" src={plan.imageUrl} alt="" loading="lazy"/> : isPowerBankPlan(plan) ? <PowerBankArt variant={index}/> : <span className="plan-symbol"><Icon name={['sun','spark','shield'][index % 3]} size={26}/></span>}<span className="plan-art-label">ARVO · PLAN PROFILE</span><span className="plan-orbit orbit-one"/><span className="plan-orbit orbit-two"/></div>
     <div className="plan-card-body">
@@ -402,11 +402,11 @@ function PlanCard({ plan, onOpen, compact = false, index = 0, wallet }) {
       <p>{plan.summary || 'Review the fixed price, cycle, duration and published terms.'}</p>
       <div className="plan-card-metrics">
         <div className="plan-metric plan-metric-price"><span>Price</span><strong>{formatUSDT(plan.pricePaise, true)}</strong></div>
-        <div className="plan-metric"><span>{plan.cycle === 'one_time' ? 'Profit return' : `${cycleLabel(plan.cycle)} profit`}</span><strong>{formatUSDT(plan.profitPerCyclePaise || 0, true)}</strong></div>
-        <div className="plan-metric"><span>Duration</span><strong>{durationLabel(plan.durationDays)}</strong></div>
-        <div className="plan-metric"><span>Total profit</span><strong>{formatUSDT(plan.profitReturnPaise || 0, true)}</strong></div>
+        <div className="plan-metric"><span>{plan.termsReady ? (plan.cycle === 'one_time' ? 'Profit return' : `${cycleLabel(plan.cycle)} profit`) : 'Profit / cycle'}</span><strong>{plan.termsReady ? formatUSDT(plan.profitPerCyclePaise || 0, true) : 'Not set'}</strong></div>
+        <div className="plan-metric"><span>Duration</span><strong>{plan.termsReady ? durationLabel(plan.durationDays) : 'Not set'}</strong></div>
+        <div className="plan-metric"><span>Total profit</span><strong>{plan.termsReady ? formatUSDT(plan.profitReturnPaise || 0, true) : 'Not set'}</strong></div>
       </div>
-      <div className="plan-card-footer"><span>{plan.comingSoon ? 'Applications open soon' : reachedLimit ? 'Purchase limit reached' : 'View plan details'}</span><Icon name="chevron" size={15}/></div>
+      <div className="plan-card-footer"><span>{plan.comingSoon ? 'Applications open soon' : !plan.termsReady ? 'Plan terms are being finalized' : reachedLimit ? 'Purchase limit reached' : 'View plan details'}</span><Icon name="chevron" size={15}/></div>
     </div>
   </button>
 }
@@ -455,7 +455,7 @@ function PlanDetail({ plan, onBack, onApply, signedOut, onSignIn, wallet }) {
   const limit = Math.max(1, Number(plan.purchaseLimit) || 2)
   const used = Math.max(0, Number(wallet?.planUsage?.[plan.id] || 0))
   const reachedLimit = !signedOut && used >= limit
-  const payoutLabel = plan.cycle === 'one_time' ? 'Profit return' : `${cycleLabel(plan.cycle)} profit`
+  const payoutLabel = !plan.termsReady ? 'Profit per cycle' : plan.cycle === 'one_time' ? 'Profit return' : `${cycleLabel(plan.cycle)} profit`
   async function submit(event) {
     event.preventDefault()
     if (signedOut) return onSignIn()
@@ -467,16 +467,16 @@ function PlanDetail({ plan, onBack, onApply, signedOut, onSignIn, wallet }) {
     <div className="detail-grid">
       <div>
         <div className={`detail-art plan-art green ${plan.imageUrl ? 'has-image' : ''}`}>{plan.imageUrl ? <img className="plan-art-image" src={plan.imageUrl} alt="" fetchPriority="high"/> : isPowerBankPlan(plan) ? <PowerBankArt variant={Number(plan.slug?.match(/-(\d+)-/)?.[1] || 1) - 1}/> : <span className="plan-symbol"><Icon name="spark" size={34}/></span>}<span className="plan-art-label">ARVO · PLAN PROFILE</span><span className="plan-orbit orbit-one"/><span className="plan-orbit orbit-two"/></div>
-        <div className="detail-overview"><span className="eyebrow">{plan.category || 'INVESTMENT PLAN'}</span>{plan.comingSoon && <span className="plan-availability is-muted">Coming soon</span>}<h1>{plan.name}</h1><p>{plan.summary}</p></div>
+        <div className="detail-overview"><span className="eyebrow">{plan.category || 'INVESTMENT PLAN'}</span>{(plan.comingSoon || !plan.termsReady) && <span className="plan-availability is-muted">{plan.comingSoon ? 'Coming soon' : 'Terms pending'}</span>}<h1>{plan.name}</h1><p>{plan.summary}</p></div>
         <div className="detail-panel">
           <span className="eyebrow">PLAN OVERVIEW</span><h2>Published information</h2><p>{plan.details || 'The administrator has not added further plan information.'}</p>
           <div className="detail-facts">
             <div><span>Fixed price</span><strong>{formatUSDT(plan.pricePaise, true)}</strong></div>
-            <div><span>{payoutLabel}</span><strong>{formatUSDT(plan.profitPerCyclePaise || 0, true)}</strong></div>
-            <div><span>Duration</span><strong>{durationLabel(plan.durationDays)}</strong></div>
-            <div><span>Total profit</span><strong>{formatUSDT(plan.profitReturnPaise || 0, true)}</strong></div>
-            <div><span>Investment cycle</span><strong>{cycleLabel(plan.cycle)}</strong></div>
-            <div><span>Investment ROI</span><strong>{Number(plan.investmentRoiPct || 0)}%</strong></div>
+            <div><span>{payoutLabel}</span><strong>{plan.termsReady ? formatUSDT(plan.profitPerCyclePaise || 0, true) : 'Not set'}</strong></div>
+            <div><span>Duration</span><strong>{plan.termsReady ? durationLabel(plan.durationDays) : 'Not set'}</strong></div>
+            <div><span>Total profit</span><strong>{plan.termsReady ? formatUSDT(plan.profitReturnPaise || 0, true) : 'Not set'}</strong></div>
+            <div><span>Investment cycle</span><strong>{plan.termsReady ? cycleLabel(plan.cycle) : 'Not set'}</strong></div>
+            <div><span>Investment ROI</span><strong>{plan.termsReady ? `${Number(plan.investmentRoiPct || 0)}%` : 'Not set'}</strong></div>
             <div><span>Purchase limit</span><strong>{used}/{limit}</strong></div>
             <div><span>Risk information</span><strong>{plan.riskLabel || 'See plan documents'}</strong></div>
             <div><span>Terms document</span><strong>{plan.termsUrl ? <a href={plan.termsUrl} target="_blank" rel="noreferrer">Open terms</a> : 'Not supplied'}</strong></div>
@@ -484,14 +484,14 @@ function PlanDetail({ plan, onBack, onApply, signedOut, onSignIn, wallet }) {
         </div>
       </div>
       <aside className="detail-aside">
-        <span className="eyebrow">PLAN ACCESS</span><h3>{plan.comingSoon ? 'Coming soon.' : reachedLimit ? 'Limit reached.' : 'Buy this plan.'}</h3>
-        <p>{plan.comingSoon ? 'This plan is not accepting applications yet.' : reachedLimit ? 'You have reached the administrator-set purchase limit for this plan.' : 'This sends a purchase request for review. Your wallet is charged only after administrator approval.'}</p>
+        <span className="eyebrow">PLAN ACCESS</span><h3>{plan.comingSoon ? 'Coming soon.' : !plan.termsReady ? 'Terms pending.' : reachedLimit ? 'Limit reached.' : 'Buy this plan.'}</h3>
+        <p>{plan.comingSoon ? 'This plan is not accepting applications yet.' : !plan.termsReady ? 'The administrator must publish the cycle, duration and total return before applications open.' : reachedLimit ? 'You have reached the administrator-set purchase limit for this plan.' : 'This sends a purchase request for review. Your wallet is charged only after administrator approval.'}</p>
         <div className="aside-divider"/>
         <div className="aside-row"><span>Price</span><strong>{formatUSDT(plan.pricePaise, true)}</strong></div>
-        <div className="aside-row"><span>{payoutLabel}</span><strong>{formatUSDT(plan.profitPerCyclePaise || 0, true)}</strong></div>
-        <div className="aside-row"><span>Total profit · duration</span><strong>{formatUSDT(plan.profitReturnPaise || 0, true)} · {durationLabel(plan.durationDays)}</strong></div>
+        <div className="aside-row"><span>{payoutLabel}</span><strong>{plan.termsReady ? formatUSDT(plan.profitPerCyclePaise || 0, true) : 'Not set'}</strong></div>
+        <div className="aside-row"><span>Total profit · duration</span><strong>{plan.termsReady ? `${formatUSDT(plan.profitReturnPaise || 0, true)} · ${durationLabel(plan.durationDays)}` : 'Not set'}</strong></div>
         <div className="aside-row"><span>Limit used</span><strong>{used}/{limit}</strong></div>
-        {plan.comingSoon ? <button type="button" className="outline-button full-button" disabled>Coming soon</button> : reachedLimit ? <button type="button" className="outline-button full-button" disabled>Limit reached</button> : <form onSubmit={submit}><label className="field-label" htmlFor="apply-amount">Fixed plan price (USDT)</label><input className="form-input" id="apply-amount" value={plan.price} readOnly inputMode="decimal" required/><button className="primary-button full-button apply-button" disabled={busy}>{busy ? 'Submitting…' : signedOut ? 'Sign in to continue' : 'Buy now · Request review'} <Icon name="chevron" size={16}/></button></form>}
+        {plan.comingSoon ? <button type="button" className="outline-button full-button" disabled>Coming soon</button> : !plan.termsReady ? <button type="button" className="outline-button full-button" disabled>Terms pending</button> : reachedLimit ? <button type="button" className="outline-button full-button" disabled>Limit reached</button> : <form onSubmit={submit}><label className="field-label" htmlFor="apply-amount">Fixed plan price (USDT)</label><input className="form-input" id="apply-amount" value={plan.price} readOnly inputMode="decimal" required/><button className="primary-button full-button apply-button" disabled={busy}>{busy ? 'Submitting…' : signedOut ? 'Sign in to continue' : 'Buy now · Request review'} <Icon name="chevron" size={16}/></button></form>}
         {error && <p className="form-error">{error}</p>}
         <span className="small-legal">Published figures follow administrator-set terms. Return amounts are not credited automatically.</span>
       </aside>

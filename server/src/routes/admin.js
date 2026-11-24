@@ -278,6 +278,11 @@ router.patch('/applications/:id/review', asyncRoute(async (req, res) => {
         error.status = 409
         throw error
       }
+      if (!plan.pricePaise || !plan.cycle || !plan.durationDays || !plan.profitReturnPaise) {
+        const error = new Error('Set complete cycle, duration and profit terms before approving this application.')
+        error.status = 409
+        throw error
+      }
       await PlanPosition.create([{ userId: current.userId, planId: current.planId, applicationId: current._id, amountPaise: current.amountPaise, cycle: plan.cycle, durationDays: plan.durationDays, profitReturnPaise: plan.profitReturnPaise, investmentRoiPct: plan.investmentRoiPct }], { session })
       await ledger(session, { userId: current.userId, kind: 'investment', direction: 'debit', amountPaise: current.amountPaise, referenceType: 'planApplication', referenceId: current._id, description: 'Investment application accepted' })
       await queueReferralRewards(session, current)

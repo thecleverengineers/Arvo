@@ -30,6 +30,7 @@ function publicPlan(plan) {
   const cycle = plan.cycle || 'monthly'
   const durationDays = Number(plan.durationDays || 30)
   const profitReturnPaise = Number(plan.profitReturnPaise || 0)
+  const termsReady = Boolean(plan.pricePaise > 0 && plan.cycle && Number(plan.durationDays) > 0 && profitReturnPaise > 0)
   const periods = cycle === 'one_time' ? 1 : Math.max(1, Math.ceil(durationDays / planCycleDays(cycle)))
   return {
     id: plan._id.toString(),
@@ -43,6 +44,7 @@ function publicPlan(plan) {
     cycle,
     durationDays,
     purchaseLimit: Math.max(1, Number(plan.purchaseLimit) || 2),
+    termsReady,
     investmentRoiPct: plan.investmentRoiPct ?? 0,
     profitReturnPaise,
     profitPerCyclePaise: Math.floor(profitReturnPaise / periods),
@@ -271,6 +273,7 @@ router.post('/plans/:id/apply', requireAuth, asyncRoute(async (req, res) => {
   const plan = await InvestmentPlan.findOne({ _id: req.params.id, isActive: true })
   if (!plan) return res.status(404).json({ error: 'Plan not found or inactive.' })
   if (plan.comingSoon) return res.status(409).json({ error: 'This plan is coming soon and is not accepting applications yet.' })
+  if (!plan.pricePaise || !plan.cycle || !plan.durationDays || !plan.profitReturnPaise) return res.status(409).json({ error: 'This plan is not accepting applications until its investment terms are complete.' })
   const purchaseLimit = Math.max(1, Number(plan.purchaseLimit) || 2)
   const priorPurchases = await PlanApplication.countDocuments({ userId: req.user._id, planId: plan._id, status: { $in: ['pending', 'accepted'] } })
   if (priorPurchases >= purchaseLimit) return res.status(409).json({ error: 'You have reached the purchase limit for this plan.' })
