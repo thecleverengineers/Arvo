@@ -255,8 +255,8 @@ function App() {
     notify(result.message || 'Withdrawal MPIN saved securely')
   }
 
-  const navItems = [['Home','home'],['Plans','layers'],['Wallet','wallet'],['Team','users'],['Profile','user']]
-  if (user?.role === 'admin') navItems.push(['Admin','shield'])
+  const navItems = [['Home','home','Home'],['Income','chart','Income'],['Team','users','Team'],['Share','share','Referrals'],['My','user','My']]
+  const activeNavPage = ({ Plans: 'Home', Wallet: 'My', Profile: 'My', Settings: 'My', Messages: 'My', About: 'My', Install: 'My', Bonuses: 'My', Support: 'My', Admin: 'My', RechargeDetails: 'My', WithdrawalDetails: 'My', Referrals: 'Share' })[page] || page
   const currentTheme = themes.find((item) => item.id === theme) || themes[0]
 
   return <div className="app-shell" data-theme={theme} data-view={page === 'Admin' ? 'admin' : 'mobile'}>
@@ -300,6 +300,9 @@ function App() {
         {page === 'Referrals' && <ReferralPage referrals={referrals} rewards={rewards} notify={notify}/>}
         {page === 'Team' && <TeamPage team={team} referrals={referrals} onShare={() => navigate('Referrals')} onOpenIncome={() => navigate('Income')}/>}
         {page === 'Income' && <IncomePage income={income} onWallet={() => navigate('Wallet')}/>}
+        {page === 'RechargeDetails' && <WalletRequestHistory type="deposit" wallet={wallet} onAction={setAction}/>}
+        {page === 'WithdrawalDetails' && <WalletRequestHistory type="withdrawal" wallet={wallet} onAction={setAction}/>}
+        {page === 'My' && <MyPage user={user} wallet={wallet} income={income} onNavigate={navigate} onLogout={logout} onKyc={() => openAccountItem('kyc')} onAdmin={() => navigate('Admin')}/>}
         {page === 'Bonuses' && <BonusPage rewards={rewards} onClaim={claimReward}/>}
         {page === 'About' && <AboutPage items={about}/>}
         {page === 'Install' && <InstallPage installPrompt={installPrompt} onInstall={installArvo}/>}
@@ -311,7 +314,7 @@ function App() {
       </>}
     </main>
 
-    {user && <nav className="bottom-nav" aria-label="Main navigation">{navItems.map(([label, icon]) => <button key={label} className={`nav-item ${page === label ? 'active' : ''}`} onClick={() => navigate(label)}><Icon name={icon} size={20}/><span>{label}</span></button>)}</nav>}
+    {user && <nav className="bottom-nav" aria-label="Main navigation">{navItems.map(([label, icon, destination]) => <button key={label} className={`nav-item ${activeNavPage === label ? 'active' : ''}`} onClick={() => navigate(destination)}><Icon name={icon} size={20}/><span>{label}</span></button>)}</nav>}
 
     {action && <WalletActionModal type={action} user={user} methods={settings.paymentMethods || []} onClose={() => setAction(null)} onSubmit={submitWalletAction} notify={notify}/>}
     {toast && <div className="toast"><span className="toast-check"><Icon name="check" size={14}/></span>{toast}</div>}
@@ -469,6 +472,48 @@ function IncomePage({ income, onWallet }) {
   const entries=income?.entries||[], claims=income?.claims||[]
   const labels={plan_return:'Plan profit return',investment_return:'Investment principal returned',referral_reward:'Referral reward',welcome_bonus:'Welcome bonus',team_bonus:'Team milestone bonus',daily_bonus:'Daily invite bonus'}
   return <><PageHeading eyebrow="YOUR ACCOUNT ACTIVITY" title="Income details" subtitle="Review posted plan returns, rewards and pending claims." action={<button className="secondary-button" onClick={onWallet}>Open wallet</button>}/><section className="income-summary-card"><div><span className="eyebrow">TOTAL POSTED INCOME</span><strong>{formatUSDT(income?.paidPaise||0,true)}</strong></div><p>Only posted entries have been credited to your wallet.</p></section><section className="section-block"><div className="section-heading"><div><span className="eyebrow">INCOME LEDGER</span><h2>Posted activity</h2></div></div>{entries.length?<div className="income-list">{entries.map((entry)=><div className="income-row" key={entry._id}><span className="income-row-icon"><Icon name="chart" size={17}/></span><div><strong>{labels[entry.kind]||entry.kind}</strong><span>{entry.description||'Wallet credit'} · {new Date(entry.createdAt).toLocaleString()}</span></div><div className="income-row-value"><strong>+{formatUSDT(entry.amountPaise,true)}</strong><StatusPill status={entry.status}/></div></div>)}</div>:<EmptyState title="No income entries yet" description="Approved returns and rewards will appear here."/>}</section><section className="section-block"><div className="section-heading"><div><span className="eyebrow">BONUS REQUESTS</span><h2>Claim status</h2></div></div>{claims.length?<div className="request-list">{claims.map((claim)=><div className="request-row" key={claim._id}><div><strong>{labels[claim.kind]||claim.kind} · {formatUSDT(claim.amountPaise,true)}</strong><span>Submitted {new Date(claim.createdAt).toLocaleString()}{claim.reviewNote?' · '+claim.reviewNote:''}</span></div><StatusPill status={claim.status}/></div>)}</div>:<EmptyState title="No bonus claims" description="Eligible rewards can be requested from Bonuses."/>}</section></>
+}
+
+function MyPage({ user, wallet, income, onNavigate, onLogout, onKyc, onAdmin }) {
+  const balance = wallet?.wallet?.availablePaise || 0
+  const links = [
+    ['Messages', 'bell', 'Messages', 'Read replies and contact Arvo support.'],
+    ['Personal information', 'user', 'Profile', 'Edit your name and contact details.'],
+    ['KYC verification', 'shield', 'kyc', 'Review your verification status and MPIN access.'],
+    ['Income details', 'chart', 'Income', 'View posted plan returns and rewards.'],
+    ['Recharge details', 'arrowDown', 'RechargeDetails', 'Track USDT deposit requests.'],
+    ['Withdrawal details', 'arrowUp', 'WithdrawalDetails', 'Track USDT withdrawal requests.'],
+    ['Bonuses', 'spark', 'Bonuses', 'Review eligibility and reward claim status.'],
+    ['About us', 'help', 'About', 'Read information published by Arvo.'],
+    ['Download', 'arrowDown', 'Install', 'Install Arvo or add it to your home screen.'],
+    ['Language', 'list', 'Settings', 'Choose an enabled content language.'],
+    ['Settings', 'sun', 'Settings', 'Review your Arvo preferences.'],
+  ]
+  function open(destination) {
+    if (destination === 'kyc') return onKyc()
+    onNavigate(destination)
+  }
+  return <><PageHeading eyebrow="YOUR ARVO ACCOUNT" title="My" subtitle="Your balance, account details and preferences."/>
+    <section className="my-overview" aria-label="Account summary">
+      <button onClick={() => onNavigate('Wallet')}><span>Balance</span><strong>{formatUSDT(balance, true)}</strong></button>
+      <span className="my-overview-divider"/>
+      <button onClick={() => onNavigate('Income')}><span>Total income</span><strong>{formatUSDT(income?.paidPaise || 0, true)}</strong></button>
+    </section>
+    <section className="my-account-menu" aria-label="My account options">
+      {links.map(([label, icon, destination, detail]) => <button className="my-account-link" key={label} onClick={() => open(destination)}><span className="my-account-link-icon"><Icon name={icon} size={19}/></span><span className="my-account-link-text"><strong>{label}</strong><small>{detail}</small></span><Icon name="chevron" size={19}/></button>)}
+      {user?.role === 'admin' && <button className="my-account-link" onClick={onAdmin}><span className="my-account-link-icon"><Icon name="shield" size={19}/></span><span className="my-account-link-text"><strong>Admin console</strong><small>Manage plans, users and account reviews.</small></span><Icon name="chevron" size={19}/></button>}
+      <button className="my-account-link my-account-logout" onClick={onLogout}><span className="my-account-link-icon"><Icon name="logout" size={19}/></span><span className="my-account-link-text"><strong>Log out</strong><small>Sign out from this device.</small></span><Icon name="chevron" size={19}/></button>
+    </section>
+  </>
+}
+
+function WalletRequestHistory({ type, wallet, onAction }) {
+  const isDeposit = type === 'deposit'
+  const items = isDeposit ? (wallet?.deposits || []) : (wallet?.withdrawals || [])
+  const title = isDeposit ? 'Recharge details' : 'Withdrawal details'
+  return <><PageHeading eyebrow={isDeposit ? 'USDT DEPOSIT HISTORY' : 'USDT WITHDRAWAL HISTORY'} title={title} subtitle={isDeposit ? 'Track deposit references and administrator review.' : 'Track withdrawal requests and payout status.'} action={<button className="secondary-button" onClick={() => onAction(isDeposit ? 'deposit' : 'withdrawal')}>{isDeposit ? '+ Recharge' : '+ Withdraw'}</button>}/>
+    {items.length ? <section className="my-history-list">{items.map((item) => <article className="my-history-row" key={item._id}><span className="my-history-icon"><Icon name={isDeposit ? 'arrowDown' : 'arrowUp'} size={18}/></span><div className="my-history-copy"><strong>{isDeposit ? 'USDT recharge' : 'USDT withdrawal'} · {formatUSDT(item.amountPaise, true)}</strong><span>{new Date(item.createdAt).toLocaleString()}</span>{item.paymentReference && <small>Reference · {item.paymentReference}</small>}{item.payoutAddress && <small>{item.payoutNetwork || 'USDT'} · {item.payoutAddress}</small>}{item.reviewNote && <small>Review · {item.reviewNote}</small>}</div><StatusPill status={item.status}/></article>)}</section> : <EmptyState title={isDeposit ? 'No recharge requests yet' : 'No withdrawal requests yet'} description={isDeposit ? 'Your submitted deposit requests will appear here.' : 'Your submitted withdrawal requests will appear here.'} action={<button className="primary-button" onClick={() => onAction(isDeposit ? 'deposit' : 'withdrawal')}>{isDeposit ? 'Submit recharge' : 'Request withdrawal'}</button>}/>}
+  </>
 }
 
 function BonusPage({ rewards, onClaim }) {

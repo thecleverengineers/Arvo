@@ -435,3 +435,42 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
   .settings-theme-grid { grid-template-columns: 1fr; }
   .settings-theme-card { min-height: 68px; }
 }
+
+/* Mobile My account screen */
+.my-overview { width:100%; max-width:760px; min-height:122px; margin:0 0 22px; padding:20px 14px; display:grid; grid-template-columns:1fr 1px 1fr; align-items:center; border:1px solid var(--border); border-radius:16px; background:var(--card); box-shadow:var(--shadow); }
+.my-overview button { min-width:0; min-height:76px; display:grid; place-content:center; justify-items:center; gap:8px; border:0; border-radius:10px; color:var(--text); background:transparent; cursor:pointer; }
+.my-overview button:hover { background:var(--soft-green); }
+.my-overview button span { color:var(--muted); font-size:11px; }
+.my-overview button strong { max-width:100%; overflow-wrap:anywhere; font-size:clamp(15px,3vw,21px); font-weight:650; letter-spacing:-.035em; }
+.my-overview-divider { width:1px; height:64px; background:var(--border); }
+.my-account-menu { width:100%; max-width:760px; display:grid; gap:9px; }
+.my-account-link { width:100%; min-height:66px; display:grid; grid-template-columns:38px minmax(0,1fr) 18px; align-items:center; gap:12px; padding:9px 14px; border:1px solid transparent; border-radius:13px; color:var(--text); background:color-mix(in srgb,var(--card) 92%,var(--page)); text-align:left; box-shadow:0 3px 12px rgba(25,39,31,.035); cursor:pointer; transition:background .16s,border-color .16s; }
+.my-account-link:hover { border-color:var(--border); background:var(--card); }
+.my-account-link-icon { width:36px; height:36px; display:grid; place-items:center; border-radius:10px; color:var(--deep); background:var(--soft-green); }
+.my-account-link-text { min-width:0; display:grid; gap:4px; }
+.my-account-link-text strong { font-size:11px; font-weight:600; }
+.my-account-link-text small { color:var(--muted); font-size:8px; line-height:1.35; }
+.my-account-link > svg:last-child { color:#999d96; }
+.my-account-logout .my-account-link-icon { color:#8d5148; background:#f8ece8; }
+.my-account-logout .my-account-link-text strong { color:#8d5148; }
+.my-history-list { width:100%; max-width:760px; display:grid; gap:8px; }
+.my-history-row { min-width:0; display:grid; grid-template-columns:36px minmax(0,1fr) auto; align-items:center; gap:11px; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--card); box-shadow:var(--shadow); }
+.my-history-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:10px; color:var(--deep); background:var(--soft-green); }
+.my-history-copy { min-width:0; display:grid; gap:4px; }
+.my-history-copy strong { font-size:10px; font-weight:600; overflow-wrap:anywhere; }
+.my-history-copy span,.my-history-copy small { color:var(--muted); font-size:8px; line-height:1.4; overflow-wrap:anywhere; }
+.my-history-row .status-pill { white-space:nowrap; }
+@media (max-width:640px) {
+ .my-overview { min-height:106px; margin-bottom:16px; padding:12px 8px; }
+ .my-overview button span { font-size:10px; }
+ .my-overview button strong { font-size:clamp(14px,4vw,18px); }
+ .my-account-menu { gap:8px; }
+ .my-account-link { min-height:60px; grid-template-columns:34px minmax(0,1fr) 17px; gap:10px; padding:8px 10px; border-radius:12px; }
+ .my-account-link-icon { width:32px; height:32px; }
+ .my-account-link-text strong { font-size:10px; }
+ .my-account-link-text small { font-size:7px; }
+ .my-history-row { grid-template-columns:31px minmax(0,1fr) auto; gap:8px; padding:9px; }
+ .my-history-icon { width:30px; height:30px; }
+ .my-history-copy strong { font-size:9px; }
+ .my-history-copy span,.my-history-copy small { font-size:7px; }
+}
