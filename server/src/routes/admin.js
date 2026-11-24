@@ -17,6 +17,7 @@ const planInput = z.object({
   price: z.union([z.number(), z.string()]).nullable().optional(),
   cycle: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'one_time']).default('monthly'),
   durationDays: z.coerce.number().int().min(1).max(36500).default(30),
+  purchaseLimit: z.coerce.number().int().min(1).max(1000).default(2),
   investmentRoiPct: z.coerce.number().min(0).max(10000).default(0),
   profitReturn: z.union([z.number(), z.string()]).default(0),
   riskLabel: z.string().trim().max(80).default('See plan documents'),

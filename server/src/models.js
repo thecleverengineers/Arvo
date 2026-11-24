@@ -33,6 +33,7 @@ const planSchema = new Schema({
   pricePaise: { type: Number, min: 0, default: 0 },
   cycle: { type: String, enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'one_time'], default: 'monthly' },
   durationDays: { type: Number, min: 1, max: 36500, default: 30 },
+  purchaseLimit: { type: Number, min: 1, max: 1000, default: 2 },
   investmentRoiPct: { type: Number, min: 0, max: 10000, default: 0 },
   profitReturnPaise: { type: Number, min: 0, max: 1_000_000_000_000, default: 0 },
   riskLabel: { type: String, trim: true, maxlength: 80, default: 'See plan documents' },

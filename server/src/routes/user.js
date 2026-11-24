@@ -22,8 +22,36 @@ function getRequestKey(req, res) {
   return parsed.data
 }
 
+function planCycleDays(cycle) {
+  return ({ daily: 1, weekly: 7, monthly: 30, quarterly: 90, yearly: 365, one_time: 36500 })[cycle] || 30
+}
+
 function publicPlan(plan) {
-  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, pricePaise: plan.pricePaise || null, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, cycle: plan.cycle || 'monthly', durationDays: plan.durationDays || 30, investmentRoiPct: plan.investmentRoiPct ?? 0, profitReturnPaise: plan.profitReturnPaise || 0, profitReturn: asRupees(plan.profitReturnPaise || 0), riskLabel: plan.riskLabel, termsUrl: plan.termsUrl, imageUrl: plan.imageUrl || '', comingSoon: Boolean(plan.comingSoon) }
+  const cycle = plan.cycle || 'monthly'
+  const durationDays = Number(plan.durationDays || 30)
+  const profitReturnPaise = Number(plan.profitReturnPaise || 0)
+  const periods = cycle === 'one_time' ? 1 : Math.max(1, Math.ceil(durationDays / planCycleDays(cycle)))
+  return {
+    id: plan._id.toString(),
+    name: plan.name,
+    slug: plan.slug,
+    category: plan.category,
+    summary: plan.summary,
+    details: plan.details,
+    pricePaise: plan.pricePaise || null,
+    price: plan.pricePaise ? asRupees(plan.pricePaise) : null,
+    cycle,
+    durationDays,
+    purchaseLimit: Math.max(1, Number(plan.purchaseLimit) || 2),
+    investmentRoiPct: plan.investmentRoiPct ?? 0,
+    profitReturnPaise,
+    profitPerCyclePaise: Math.floor(profitReturnPaise / periods),
+    profitReturn: asRupees(profitReturnPaise),
+    riskLabel: plan.riskLabel,
+    termsUrl: plan.termsUrl,
+    imageUrl: plan.imageUrl || '',
+    comingSoon: Boolean(plan.comingSoon),
+  }
 }
 
 router.get('/settings', asyncRoute(async (_req, res) => {
@@ -129,12 +157,17 @@ router.get('/wallet', requireAuth, asyncRoute(async (req, res) => {
     PlanPosition.find({ userId: req.user._id, status: 'active' }).populate('planId', 'name').lean(),
     PlanApplication.find({ userId: req.user._id }).populate('planId', 'name').sort({ createdAt: -1 }).limit(20).lean(),
   ])
+  const planUsage = await PlanApplication.aggregate([
+    { $match: { userId: req.user._id, status: { $in: ['pending', 'accepted'] } } },
+    { $group: { _id: '$planId', count: { $sum: 1 } } },
+  ])
   res.json({
     wallet: { currency: 'USDT', availablePaise: wallet.availablePaise, investedPaise: wallet.investedPaise, reservedPaise: wallet.reservedPaise, available: asRupees(wallet.availablePaise), invested: asRupees(wallet.investedPaise), reserved: asRupees(wallet.reservedPaise) },
     transactions,
     deposits,
     withdrawals,
     planApplications: planApplications.map((application) => ({ ...application, planName: application.planId?.name || 'Investment plan' })),
+    planUsage: Object.fromEntries(planUsage.map((item) => [item._id.toString(), item.count])),
     positions: positions.map((position) => ({ id: position._id, plan: position.planId?.name || 'Investment plan', amountPaise: position.amountPaise, amount: asRupees(position.amountPaise), startedAt: position.startedAt, cycle: position.cycle || position.planId?.cycle || 'monthly', durationDays: position.durationDays || position.planId?.durationDays || 30, profitReturnPaise: position.profitReturnPaise ?? position.planId?.profitReturnPaise ?? 0, investmentRoiPct: position.investmentRoiPct ?? position.planId?.investmentRoiPct ?? 0, releasedPaise: position.releasedPaise || 0, releasedCycles: position.releasedCycles || 0 })),
   })
 }))
@@ -238,6 +271,9 @@ router.post('/plans/:id/apply', requireAuth, asyncRoute(async (req, res) => {
   const plan = await InvestmentPlan.findOne({ _id: req.params.id, isActive: true })
   if (!plan) return res.status(404).json({ error: 'Plan not found or inactive.' })
   if (plan.comingSoon) return res.status(409).json({ error: 'This plan is coming soon and is not accepting applications yet.' })
+  const purchaseLimit = Math.max(1, Number(plan.purchaseLimit) || 2)
+  const priorPurchases = await PlanApplication.countDocuments({ userId: req.user._id, planId: plan._id, status: { $in: ['pending', 'accepted'] } })
+  if (priorPurchases >= purchaseLimit) return res.status(409).json({ error: 'You have reached the purchase limit for this plan.' })
   const amountPaise = toPaise(req.body?.amount)
   if (!amountPaise) return res.status(400).json(amountError)
   if (!plan.pricePaise) return res.status(409).json({ error: 'This plan does not have a price yet.' })
