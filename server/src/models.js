@@ -30,7 +30,7 @@ const planSchema = new Schema({
   category: { type: String, trim: true, maxlength: 50, default: 'Investment plan' },
   summary: { type: String, trim: true, maxlength: 500, default: '' },
   details: { type: String, trim: true, maxlength: 10000, default: '' },
-  pricePaise: { type: Number, required: true, min: 1 },
+  pricePaise: { type: Number, min: 0, default: 0 },
   cycle: { type: String, enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'one_time'], default: 'monthly' },
   durationDays: { type: Number, min: 1, max: 36500, default: 30 },
   investmentRoiPct: { type: Number, min: 0, max: 10000, default: 0 },
@@ -38,6 +38,7 @@ const planSchema = new Schema({
   riskLabel: { type: String, trim: true, maxlength: 80, default: 'See plan documents' },
   termsUrl: { type: String, trim: true, maxlength: 1000, default: '' },
   imageUrl: { type: String, maxlength: 600_000, default: '' },
+  comingSoon: { type: Boolean, default: false, index: true },
   isActive: { type: Boolean, default: true, index: true },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true })
@@ -116,7 +117,7 @@ applicationSchema.index({ userId: 1, requestKey: 1 }, { unique: true })
 
 const ledgerSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  kind: { type: String, enum: ['deposit', 'withdrawal_hold', 'withdrawal_refund', 'transfer_in', 'transfer_out', 'investment'], required: true },
+  kind: { type: String, enum: ['deposit', 'withdrawal_hold', 'withdrawal_refund', 'transfer_in', 'transfer_out', 'investment', 'plan_return', 'referral_reward', 'welcome_bonus', 'team_bonus', 'daily_bonus', 'investment_return'], required: true },
   direction: { type: String, enum: ['credit', 'debit'], required: true },
   amountPaise: { type: Number, required: true, min: 1 },
   status: { type: String, enum: ['posted', 'reserved', 'reversed'], default: 'posted' },
@@ -130,8 +131,36 @@ const planPositionSchema = new Schema({
   planId: { type: Schema.Types.ObjectId, ref: 'InvestmentPlan', required: true },
   applicationId: { type: Schema.Types.ObjectId, ref: 'PlanApplication', required: true, unique: true },
   amountPaise: { type: Number, required: true, min: 1 },
+  cycle: { type: String, enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'one_time'], default: 'monthly' },
+  durationDays: { type: Number, min: 1, max: 36500, default: 30 },
+  profitReturnPaise: { type: Number, min: 0, default: 0 },
+  investmentRoiPct: { type: Number, min: 0, default: 0 },
+  releasedCycles: { type: Number, min: 0, default: 0 },
+  releasedPaise: { type: Number, min: 0, default: 0 },
   status: { type: String, enum: ['active', 'closed'], default: 'active', index: true },
   startedAt: { type: Date, default: Date.now },
+}, { timestamps: true })
+
+const planReleaseSchema = new Schema({
+  positionId: { type: Schema.Types.ObjectId, ref: 'PlanPosition', required: true, index: true },
+  sequence: { type: Number, required: true },
+  amountPaise: { type: Number, required: true, min: 1 },
+  releasedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+}, { timestamps: true })
+planReleaseSchema.index({ positionId: 1, sequence: 1 }, { unique: true })
+
+const rewardClaimSchema = new Schema({
+  claimKey: { type: String, required: true, unique: true, maxlength: 180 },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  sourceUserId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  sourceApplicationId: { type: Schema.Types.ObjectId, ref: 'PlanApplication', default: null },
+  kind: { type: String, enum: ['referral_purchase', 'welcome_bonus', 'team_milestone', 'daily_invite'], required: true, index: true },
+  level: { type: Number, min: 1, max: 3, default: null },
+  amountPaise: { type: Number, required: true, min: 1 },
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
+  reviewedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  reviewedAt: { type: Date, default: null },
+  reviewNote: { type: String, trim: true, maxlength: 500, default: '' },
 }, { timestamps: true })
 
 const platformSettingsSchema = new Schema({
@@ -140,6 +169,16 @@ const platformSettingsSchema = new Schema({
   languages: [{ type: String }],
   themeIds: [{ type: String }],
   activeTheme: { type: String, enum: ['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'], default: 'emerald' },
+  rewards: {
+    enabled: { type: Boolean, default: false },
+    welcomeBonusPaise: { type: Number, min: 0, default: 0 },
+    referralLevel1Pct: { type: Number, min: 0, max: 100, default: 0 },
+    referralLevel2Pct: { type: Number, min: 0, max: 100, default: 0 },
+    referralLevel3Pct: { type: Number, min: 0, max: 100, default: 0 },
+    teamMilestonePaise: { type: Number, min: 0, default: 0 },
+    teamMilestoneRewardPaise: { type: Number, min: 0, default: 0 },
+    dailyInvitePaise: { type: Number, min: 0, default: 0 },
+  },
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true })
 
@@ -184,6 +223,8 @@ export const Transfer = model('Transfer', transferSchema)
 export const PlanApplication = model('PlanApplication', applicationSchema)
 export const LedgerEntry = model('LedgerEntry', ledgerSchema)
 export const PlanPosition = model('PlanPosition', planPositionSchema)
+export const PlanRelease = model('PlanRelease', planReleaseSchema)
+export const RewardClaim = model('RewardClaim', rewardClaimSchema)
 export const PlatformSettings = model('PlatformSettings', platformSettingsSchema)
 export const AuditLog = model('AuditLog', auditSchema)
 export const ContentItem = model('ContentItem', contentItemSchema)

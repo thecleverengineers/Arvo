@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { AuditLog, ContentItem, Deposit, InvestmentPlan, LedgerEntry, PlanApplication, PlanPosition, PlatformSettings, SupportMessage, User, Wallet, Withdrawal } from '../models.js'
+import { AuditLog, ContentItem, Deposit, InvestmentPlan, LedgerEntry, PlanApplication, PlanPosition, PlanRelease, PlatformSettings, RewardClaim, SupportMessage, User, Wallet, Withdrawal } from '../models.js'
 import { asyncRoute, requireAdmin, requireAuth } from '../middleware.js'
 import { asRupees, audit, ledger, toPaise, walletFor, withTransaction } from '../transactions.js'
 import { safeUser } from '../security.js'
@@ -22,8 +22,42 @@ const planInput = z.object({
   riskLabel: z.string().trim().max(80).default('See plan documents'),
   termsUrl: z.string().trim().max(1000).default(''),
   imageUrl: z.string().max(600_000).default(''),
+  comingSoon: z.boolean().default(false),
   isActive: z.boolean().default(true),
 })
+
+async function queueWelcomeReward(session, userId) {
+  const settings = await PlatformSettings.findOne({ key: 'main' }).session(session).lean()
+  const amountPaise = Number(settings?.rewards?.welcomeBonusPaise || 0)
+  if (!settings?.rewards?.enabled || amountPaise <= 0) return
+  const [hasAcceptedDeposit, hasAcceptedApplication] = await Promise.all([
+    Deposit.exists({ userId, status: 'accepted' }).session(session),
+    PlanApplication.exists({ userId, status: 'accepted' }).session(session),
+  ])
+  if (!hasAcceptedDeposit || !hasAcceptedApplication) return
+  const claimKey = `welcome:${userId}`
+  if (await RewardClaim.exists({ claimKey }).session(session)) return
+  await RewardClaim.create([{ claimKey, userId, amountPaise, kind: 'welcome_bonus' }], { session })
+}
+
+async function queueReferralRewards(session, application) {
+  const settings = await PlatformSettings.findOne({ key: 'main' }).session(session).lean()
+  const policy = settings?.rewards
+  if (!policy?.enabled) return
+  const member = await User.findById(application.userId).select('referredBy').session(session).lean()
+  let referralCode = member?.referredBy || ''
+  const rates = [policy.referralLevel1Pct, policy.referralLevel2Pct, policy.referralLevel3Pct]
+  for (let level = 1; level <= 3 && referralCode; level += 1) {
+    const sponsor = await User.findOne({ referralCode }).select('_id referredBy').session(session).lean()
+    if (!sponsor || sponsor._id.equals(application.userId)) break
+    const amountPaise = Math.floor(application.amountPaise * Number(rates[level - 1] || 0) / 100)
+    const claimKey = `purchase:${application._id}:${level}`
+    if (amountPaise > 0 && !await RewardClaim.exists({ claimKey }).session(session)) {
+      await RewardClaim.create([{ claimKey, userId: sponsor._id, sourceUserId: application.userId, sourceApplicationId: application._id, kind: 'referral_purchase', level, amountPaise }], { session })
+    }
+    referralCode = sponsor.referredBy || ''
+  }
+}
 
 function parsePlan(body, { requirePrice = false } = {}) {
   const parsed = planInput.safeParse(body)
@@ -62,11 +96,16 @@ router.get('/users', asyncRoute(async (req, res) => {
 }))
 
 router.patch('/users/:id', asyncRoute(async (req, res) => {
-  const parsed = z.object({ status: z.enum(['active', 'blocked']).optional(), profileStatus: z.enum(['not_started', 'pending', 'verified', 'rejected']).optional(), name: z.string().trim().max(100).optional() }).safeParse(req.body)
+  const parsed = z.object({ status: z.enum(['active', 'blocked']).optional(), profileStatus: z.enum(['not_started', 'pending', 'verified', 'rejected']).optional(), role: z.enum(['user', 'admin']).optional(), name: z.string().trim().max(100).optional() }).safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
   const user = await User.findById(req.params.id)
   if (!user) return res.status(404).json({ error: 'User not found.' })
   if (user._id.equals(req.user._id) && parsed.data.status === 'blocked') return res.status(400).json({ error: 'You cannot block your own administrator account.' })
+  if (user._id.equals(req.user._id) && parsed.data.role === 'user') return res.status(400).json({ error: 'You cannot remove your own administrator access here.' })
+  if (user.role === 'admin' && parsed.data.role === 'user') {
+    const administratorCount = await User.countDocuments({ role: 'admin', status: 'active' })
+    if (administratorCount <= 1) return res.status(409).json({ error: 'Keep at least one active administrator.' })
+  }
   Object.assign(user, parsed.data)
   await user.save()
   await AuditLog.create({ actorId: req.user._id, action: 'user.updated', targetType: 'user', targetId: user._id, details: parsed.data })
@@ -76,6 +115,24 @@ router.patch('/users/:id', asyncRoute(async (req, res) => {
 router.get('/plans', asyncRoute(async (_req, res) => {
   const plans = await InvestmentPlan.find().sort({ createdAt: -1 }).lean()
   res.json({ plans: plans.map((plan) => ({ ...plan, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, profitReturn: asRupees(plan.profitReturnPaise || 0) })) })
+}))
+
+router.post('/plans/powerbank-templates', asyncRoute(async (req, res) => {
+  const templates = [
+    { suffix: '01', name: 'Arvo Power Bank 01 · Pocket', summary: 'A compact everyday power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-01-pocket' },
+    { suffix: '02', name: 'Arvo Power Bank 02 · Slim', summary: 'A slim portable power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-02-slim' },
+    { suffix: '03', name: 'Arvo Power Bank 03 · Fast Charge', summary: 'A fast-charge power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-03-fast-charge' },
+    { suffix: '04', name: 'Arvo Power Bank 04 · Rugged', summary: 'A rugged-use power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-04-rugged' },
+    { suffix: '05', name: 'Arvo Power Bank 05 · Solar', summary: 'A solar-assisted power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-05-solar' },
+    { suffix: '06', name: 'Arvo Power Bank 06 · Max', summary: 'A high-capacity power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-06-max' },
+  ]
+  const plans = await Promise.all(templates.map((item) => InvestmentPlan.findOneAndUpdate(
+    { slug: item.slug },
+    { $setOnInsert: { name: item.name, slug: item.slug, category: 'Power bank', summary: item.summary, details: 'Administrator: add exact hardware specifications, a fixed USDT price, cycle, duration, ROI, profit return and a product image before publishing.', pricePaise: 0, cycle: 'monthly', durationDays: 30, investmentRoiPct: 0, profitReturnPaise: 0, riskLabel: 'Publish complete product and risk information before opening applications.', termsUrl: '', imageUrl: '', comingSoon: true, isActive: false, createdBy: req.user._id } },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  )))
+  await AuditLog.create({ actorId: req.user._id, action: 'plan.powerbankTemplates.created', targetType: 'investmentPlan', targetId: plans[0]._id, details: { count: plans.length } })
+  res.json({ plans, count: plans.length })
 }))
 
 router.post('/plans', asyncRoute(async (req, res) => {
@@ -120,6 +177,7 @@ router.patch('/deposits/:id/review', asyncRoute(async (req, res) => {
       wallet.availablePaise += record.amountPaise
       await wallet.save({ session })
       await ledger(session, { userId: record.userId, kind: 'deposit', direction: 'credit', amountPaise: record.amountPaise, referenceType: 'deposit', referenceId: record._id, description: 'Deposit accepted by administrator' })
+      await queueWelcomeReward(session, record.userId)
     }
     await audit(session, req.user._id, `deposit.${status}`, 'deposit', record._id, { amountPaise: record.amountPaise })
     return record
@@ -213,13 +271,124 @@ router.patch('/applications/:id/review', asyncRoute(async (req, res) => {
       wallet.availablePaise -= current.amountPaise
       wallet.investedPaise += current.amountPaise
       await wallet.save({ session })
-      await PlanPosition.create([{ userId: current.userId, planId: current.planId, applicationId: current._id, amountPaise: current.amountPaise }], { session })
+      const plan = await InvestmentPlan.findById(current.planId).session(session)
+      if (!plan || plan.comingSoon) {
+        const error = new Error('This plan is not available for investment.')
+        error.status = 409
+        throw error
+      }
+      await PlanPosition.create([{ userId: current.userId, planId: current.planId, applicationId: current._id, amountPaise: current.amountPaise, cycle: plan.cycle, durationDays: plan.durationDays, profitReturnPaise: plan.profitReturnPaise, investmentRoiPct: plan.investmentRoiPct }], { session })
       await ledger(session, { userId: current.userId, kind: 'investment', direction: 'debit', amountPaise: current.amountPaise, referenceType: 'planApplication', referenceId: current._id, description: 'Investment application accepted' })
+      await queueReferralRewards(session, current)
+      await queueWelcomeReward(session, current.userId)
     }
     await audit(session, req.user._id, `application.${status}`, 'planApplication', current._id, { amountPaise: current.amountPaise })
     return current
   })
   res.json({ application })
+}))
+
+router.get('/positions', asyncRoute(async (_req, res) => {
+  const positions = await PlanPosition.find({ status: 'active' }).populate('userId', 'name mobile').populate('planId', 'name cycle durationDays profitReturnPaise investmentRoiPct').sort({ startedAt: -1 }).limit(200).lean()
+  res.json({ positions })
+}))
+
+function releaseCycleDays(cycle) {
+  return ({ daily: 1, weekly: 7, monthly: 30, quarterly: 90, yearly: 365, one_time: 36500 })[cycle] || 30
+}
+
+router.post('/positions/:id/release-due', asyncRoute(async (req, res) => {
+  const released = await withTransaction(async (session) => {
+    const position = await PlanPosition.findById(req.params.id).populate('planId', 'cycle durationDays profitReturnPaise investmentRoiPct').session(session)
+    if (!position || position.status !== 'active') {
+      const error = new Error('Active plan position not found.')
+      error.status = 404
+      throw error
+    }
+    const cycle = position.cycle || position.planId?.cycle || 'monthly'
+    const durationDays = Number(position.durationDays || position.planId?.durationDays || 30)
+    const profitReturnPaise = Number(position.profitReturnPaise ?? position.planId?.profitReturnPaise ?? 0)
+    const cycleDays = releaseCycleDays(cycle)
+    const installmentCount = cycle === 'one_time' ? 1 : Math.max(1, Math.ceil(durationDays / cycleDays))
+    const elapsedDays = Math.max(0, Math.floor((Date.now() - new Date(position.startedAt).getTime()) / 86400000))
+    const dueCycles = cycle === 'one_time'
+      ? (elapsedDays >= durationDays ? 1 : 0)
+      : Math.min(installmentCount, Math.floor(elapsedDays / cycleDays))
+    const firstSequence = Number(position.releasedCycles || 0) + 1
+    if (dueCycles < firstSequence) {
+      const error = new Error('No scheduled return is due for release yet.')
+      error.status = 409
+      throw error
+    }
+    const wallet = await walletFor(position.userId, session)
+    let releasedTotal = 0
+    const entries = []
+    for (let sequence = firstSequence; sequence <= dueCycles; sequence += 1) {
+      const amountPaise = sequence === installmentCount
+        ? profitReturnPaise - Math.floor(profitReturnPaise / installmentCount) * (installmentCount - 1)
+        : Math.floor(profitReturnPaise / installmentCount)
+      if (amountPaise <= 0) continue
+      const [release] = await PlanRelease.create([{ positionId: position._id, sequence, amountPaise, releasedBy: req.user._id }], { session })
+      wallet.availablePaise += amountPaise
+      releasedTotal += amountPaise
+      entries.push({ amountPaise, releaseId: release._id, sequence })
+      await ledger(session, { userId: position.userId, kind: 'plan_return', direction: 'credit', amountPaise, referenceType: 'planRelease', referenceId: release._id, description: `Scheduled plan return · release ${sequence}/${installmentCount}` })
+    }
+    const wasMatured = dueCycles >= installmentCount
+    if (!releasedTotal && !wasMatured) {
+      const error = new Error('No scheduled return is due for release yet.')
+      error.status = 409
+      throw error
+    }
+    position.releasedCycles = dueCycles
+    position.releasedPaise = Number(position.releasedPaise || 0) + releasedTotal
+    let principalReturnedPaise = 0
+    if (wasMatured && position.releasedPaise >= profitReturnPaise) {
+      principalReturnedPaise = position.amountPaise
+      wallet.investedPaise = Math.max(0, wallet.investedPaise - position.amountPaise)
+      wallet.availablePaise += position.amountPaise
+      position.status = 'closed'
+      await ledger(session, { userId: position.userId, kind: 'investment_return', direction: 'credit', amountPaise: position.amountPaise, referenceType: 'planPosition', referenceId: position._id, description: 'Investment principal returned at cycle completion' })
+    }
+    await position.save({ session })
+    await wallet.save({ session })
+    await audit(session, req.user._id, 'planReturn.released', 'planPosition', position._id, { cycles: entries.map((entry) => entry.sequence), profitPaise: releasedTotal, principalPaise: principalReturnedPaise })
+    return { position, releasedTotal, principalReturnedPaise, entries }
+  })
+  res.json({ release: released })
+}))
+
+router.get('/rewards', asyncRoute(async (_req, res) => {
+  const claims = await RewardClaim.find().populate('userId', 'name mobile').populate('sourceUserId', 'name mobile').populate('sourceApplicationId', 'amountPaise').sort({ createdAt: -1 }).limit(200).lean()
+  res.json({ claims })
+}))
+
+router.patch('/rewards/:id/review', asyncRoute(async (req, res) => {
+  const parsed = z.object({ decision: z.enum(['approve', 'reject']), note: z.string().trim().max(500).default('') }).safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
+  const claim = await withTransaction(async (session) => {
+    const current = await RewardClaim.findOne({ _id: req.params.id, status: 'pending' }).session(session)
+    if (!current) {
+      const error = new Error('Reward claim is not pending or no longer exists.')
+      error.status = 409
+      throw error
+    }
+    current.status = parsed.data.decision === 'approve' ? 'approved' : 'rejected'
+    current.reviewedBy = req.user._id
+    current.reviewedAt = new Date()
+    current.reviewNote = parsed.data.note
+    await current.save({ session })
+    if (current.status === 'approved') {
+      const wallet = await walletFor(current.userId, session)
+      wallet.availablePaise += current.amountPaise
+      await wallet.save({ session })
+      const kind = current.kind === 'referral_purchase' ? 'referral_reward' : current.kind === 'team_milestone' ? 'team_bonus' : current.kind === 'daily_invite' ? 'daily_bonus' : 'welcome_bonus'
+      await ledger(session, { userId: current.userId, kind, direction: 'credit', amountPaise: current.amountPaise, referenceType: 'rewardClaim', referenceId: current._id, description: 'Reward approved by administrator' })
+    }
+    await audit(session, req.user._id, `reward.${current.status}`, 'rewardClaim', current._id, { amountPaise: current.amountPaise, kind: current.kind })
+    return current
+  })
+  res.json({ claim })
 }))
 
 router.get('/settings', asyncRoute(async (_req, res) => {
@@ -234,11 +403,22 @@ router.put('/settings', asyncRoute(async (req, res) => {
     paymentMethods: z.array(z.object({ key: z.string().trim().min(2).max(60), label: z.string().trim().min(2).max(80), instructions: z.string().trim().max(2000), active: z.boolean() })).max(10),
     languages: z.array(z.string().trim().min(2).max(12)).min(1).max(10),
     themeIds: z.array(z.enum(['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'])).min(1).max(5),
+    rewards: z.object({
+      enabled: z.boolean().default(false),
+      welcomeBonus: z.coerce.number().min(0).max(1000000).default(0),
+      level1Pct: z.coerce.number().min(0).max(100).default(0),
+      level2Pct: z.coerce.number().min(0).max(100).default(0),
+      level3Pct: z.coerce.number().min(0).max(100).default(0),
+      teamMilestone: z.coerce.number().min(0).max(100000000).default(0),
+      teamMilestoneReward: z.coerce.number().min(0).max(1000000).default(0),
+      dailyInviteReward: z.coerce.number().min(0).max(1000000).default(0),
+    }).default({}),
   }).safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
   const keys = parsed.data.paymentMethods.map((method) => method.key)
   if (new Set(keys).size !== keys.length) return res.status(400).json({ error: 'Payment method keys must be unique.' })
-  const settings = await PlatformSettings.findOneAndUpdate({ key: 'main' }, { $set: { ...parsed.data, updatedBy: req.user._id } }, { new: true, upsert: true, runValidators: true })
+  const { rewards, ...settingsFields } = parsed.data
+  const settings = await PlatformSettings.findOneAndUpdate({ key: 'main' }, { $set: { ...settingsFields, rewards: { enabled: rewards.enabled, welcomeBonusPaise: Math.round(rewards.welcomeBonus * 100), referralLevel1Pct: rewards.level1Pct, referralLevel2Pct: rewards.level2Pct, referralLevel3Pct: rewards.level3Pct, teamMilestonePaise: Math.round(rewards.teamMilestone * 100), teamMilestoneRewardPaise: Math.round(rewards.teamMilestoneReward * 100), dailyInvitePaise: Math.round(rewards.dailyInviteReward * 100) }, updatedBy: req.user._id } }, { new: true, upsert: true, runValidators: true })
   await AuditLog.create({ actorId: req.user._id, action: 'settings.updated', targetType: 'platformSettings', targetId: settings._id, details: { paymentMethods: settings.paymentMethods.length } })
   res.json({ settings })
 }))

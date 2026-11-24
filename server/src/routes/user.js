@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
-import { ContentItem, Deposit, EmailVerification, InvestmentPlan, LedgerEntry, OtpChallenge, PlanApplication, PlanPosition, PlatformSettings, SupportMessage, Transfer, User, Wallet, Withdrawal } from '../models.js'
+import { ContentItem, Deposit, EmailVerification, InvestmentPlan, LedgerEntry, OtpChallenge, PlanApplication, PlanPosition, PlanRelease, PlatformSettings, RewardClaim, SupportMessage, Transfer, User, Wallet, Withdrawal } from '../models.js'
 import { asyncRoute, requireAuth } from '../middleware.js'
 import { asRupees, ledger, toPaise, walletFor, withTransaction } from '../transactions.js'
 import { hashMpin, safeUser, verifyMpin } from '../security.js'
@@ -23,7 +23,7 @@ function getRequestKey(req, res) {
 }
 
 function publicPlan(plan) {
-  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, pricePaise: plan.pricePaise || null, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, cycle: plan.cycle || 'monthly', durationDays: plan.durationDays || 30, investmentRoiPct: plan.investmentRoiPct ?? 0, profitReturnPaise: plan.profitReturnPaise || 0, profitReturn: asRupees(plan.profitReturnPaise || 0), riskLabel: plan.riskLabel, termsUrl: plan.termsUrl, imageUrl: plan.imageUrl || '' }
+  return { id: plan._id.toString(), name: plan.name, slug: plan.slug, category: plan.category, summary: plan.summary, details: plan.details, pricePaise: plan.pricePaise || null, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, cycle: plan.cycle || 'monthly', durationDays: plan.durationDays || 30, investmentRoiPct: plan.investmentRoiPct ?? 0, profitReturnPaise: plan.profitReturnPaise || 0, profitReturn: asRupees(plan.profitReturnPaise || 0), riskLabel: plan.riskLabel, termsUrl: plan.termsUrl, imageUrl: plan.imageUrl || '', comingSoon: Boolean(plan.comingSoon) }
 }
 
 router.get('/settings', asyncRoute(async (_req, res) => {
@@ -38,7 +38,7 @@ router.get('/settings', asyncRoute(async (_req, res) => {
 }))
 
 router.get('/plans', asyncRoute(async (_req, res) => {
-  const plans = await InvestmentPlan.find({ isActive: true, pricePaise: { $gt: 0 } }).sort({ createdAt: 1 }).lean()
+  const plans = await InvestmentPlan.find({ isActive: true }).sort({ createdAt: 1 }).lean()
   res.json({ plans: plans.map(publicPlan) })
 }))
 
@@ -52,7 +52,8 @@ router.get('/content/:type', asyncRoute(async (req, res) => {
   const allowed = ['news', 'banner', 'work_area', 'about', 'service', 'investor', 'partner', 'social', 'menu', 'logo', 'icon']
   if (!allowed.includes(req.params.type)) return res.status(404).json({ error: 'Content type not found.' })
   const language = String(req.query.language || 'en').trim().toLowerCase().slice(0, 12)
-  const items = await ContentItem.find({ type: req.params.type, isPublished: true, language }).sort({ sortOrder: 1, createdAt: -1 }).lean()
+  let items = await ContentItem.find({ type: req.params.type, isPublished: true, language }).sort({ sortOrder: 1, createdAt: -1 }).lean()
+  if (!items.length && language !== 'en') items = await ContentItem.find({ type: req.params.type, isPublished: true, language: 'en' }).sort({ sortOrder: 1, createdAt: -1 }).lean()
   res.json({ items })
 }))
 
@@ -134,7 +135,7 @@ router.get('/wallet', requireAuth, asyncRoute(async (req, res) => {
     deposits,
     withdrawals,
     planApplications: planApplications.map((application) => ({ ...application, planName: application.planId?.name || 'Investment plan' })),
-    positions: positions.map((position) => ({ id: position._id, plan: position.planId?.name || 'Investment plan', amountPaise: position.amountPaise, amount: asRupees(position.amountPaise), startedAt: position.startedAt })),
+    positions: positions.map((position) => ({ id: position._id, plan: position.planId?.name || 'Investment plan', amountPaise: position.amountPaise, amount: asRupees(position.amountPaise), startedAt: position.startedAt, cycle: position.cycle || position.planId?.cycle || 'monthly', durationDays: position.durationDays || position.planId?.durationDays || 30, profitReturnPaise: position.profitReturnPaise ?? position.planId?.profitReturnPaise ?? 0, investmentRoiPct: position.investmentRoiPct ?? position.planId?.investmentRoiPct ?? 0, releasedPaise: position.releasedPaise || 0, releasedCycles: position.releasedCycles || 0 })),
   })
 }))
 
@@ -236,6 +237,7 @@ router.post('/plans/:id/apply', requireAuth, asyncRoute(async (req, res) => {
   if (prior) return res.json({ application: prior, replayed: true })
   const plan = await InvestmentPlan.findOne({ _id: req.params.id, isActive: true })
   if (!plan) return res.status(404).json({ error: 'Plan not found or inactive.' })
+  if (plan.comingSoon) return res.status(409).json({ error: 'This plan is coming soon and is not accepting applications yet.' })
   const amountPaise = toPaise(req.body?.amount)
   if (!amountPaise) return res.status(400).json(amountError)
   if (!plan.pricePaise) return res.status(409).json({ error: 'This plan does not have a price yet.' })
@@ -244,18 +246,139 @@ router.post('/plans/:id/apply', requireAuth, asyncRoute(async (req, res) => {
   res.status(201).json({ application })
 }))
 
-router.get('/referrals', requireAuth, asyncRoute(async (req, res) => {
+async function teamLevelsFor(user) {
   const levels = []
-  let codes = [req.user.referralCode]
+  let codes = [user.referralCode]
   for (let level = 1; level <= 3; level += 1) {
-    const filter = { referredBy: { $in: codes }, status: 'active' }
-    const [count, nextCodes] = await Promise.all([User.countDocuments(filter), User.distinct('referralCode', filter)])
-    levels.push({ level, count, members: [] })
-    codes = nextCodes
-    if (!codes.length) break
+    const members = codes.length ? await User.find({ referredBy: { $in: codes }, status: 'active' }).select('_id referralCode').lean() : []
+    const ids = members.map((member) => member._id)
+    const [walletTotals, rechargeTotals, rewards] = ids.length ? await Promise.all([
+      Wallet.aggregate([
+        { $match: { userId: { $in: ids } } },
+        { $group: {
+          _id: null,
+          investedPaise: { $sum: '$investedPaise' },
+          investors: { $sum: { $cond: [{ $gt: ['$investedPaise', 0] }, 1, 0] } },
+        } },
+      ]),
+      Deposit.aggregate([{ $match: { userId: { $in: ids }, status: 'accepted' } }, { $group: { _id: null, amountPaise: { $sum: '$amountPaise' } } }]),
+      LedgerEntry.aggregate([{ $match: { userId: { $in: ids }, kind: 'referral_reward', status: 'posted' } }, { $group: { _id: null, amountPaise: { $sum: '$amountPaise' } } }]),
+    ]) : [[], [], []]
+    levels.push({
+      level,
+      count: members.length,
+      investors: walletTotals[0]?.investors || 0,
+      investedPaise: walletTotals[0]?.investedPaise || 0,
+      rechargePaise: rechargeTotals[0]?.amountPaise || 0,
+      rewardPaidPaise: rewards[0]?.amountPaise || 0,
+    })
+    codes = members.map((member) => member.referralCode).filter(Boolean)
   }
-  while (levels.length < 3) levels.push({ level: levels.length + 1, count: 0, members: [] })
-  res.json({ referralCode: req.user.referralCode, levels, totalMembers: levels.reduce((sum, item) => sum + item.count, 0), rewardsEnabled: false })
+  return levels
+}
+
+router.get('/referrals', requireAuth, asyncRoute(async (req, res) => {
+  const levels = await teamLevelsFor(req.user)
+  res.json({
+    referralCode: req.user.referralCode,
+    levels: levels.map((level) => ({ ...level, members: [] })),
+    totalMembers: levels.reduce((sum, item) => sum + item.count, 0),
+    rewardsEnabled: Boolean((await PlatformSettings.findOne({ key: 'main' }).select('rewards.enabled').lean())?.rewards?.enabled),
+  })
+}))
+
+router.get('/team', requireAuth, asyncRoute(async (req, res) => {
+  const levels = await teamLevelsFor(req.user)
+  res.json({
+    levels,
+    totalMembers: levels.reduce((sum, item) => sum + item.count, 0),
+    totalInvestedPaise: levels.reduce((sum, item) => sum + item.investedPaise, 0),
+    totalRechargePaise: levels.reduce((sum, item) => sum + item.rechargePaise, 0),
+    totalRewardPaidPaise: levels.reduce((sum, item) => sum + item.rewardPaidPaise, 0),
+  })
+}))
+
+router.get('/income', requireAuth, asyncRoute(async (req, res) => {
+  const entries = await LedgerEntry.find({ userId: req.user._id, kind: { $in: ['plan_return', 'referral_reward', 'welcome_bonus', 'team_bonus', 'daily_bonus', 'investment_return'] } }).sort({ createdAt: -1 }).limit(200).lean()
+  const claims = await RewardClaim.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(100).lean()
+  const totals = entries.reduce((result, entry) => {
+    if (entry.status === 'posted') result.paidPaise += entry.amountPaise
+    return result
+  }, { paidPaise: 0 })
+  res.json({ entries, claims, paidPaise: totals.paidPaise })
+}))
+
+router.get('/rewards', requireAuth, asyncRoute(async (req, res) => {
+  const settings = await PlatformSettings.findOne({ key: 'main' }).lean()
+  const team = await teamLevelsFor(req.user)
+  const acceptedDeposit = await Deposit.exists({ userId: req.user._id, status: 'accepted' })
+  const acceptedApplication = await PlanApplication.exists({ userId: req.user._id, status: 'accepted' })
+  const directMembers = await User.find({ referredBy: req.user.referralCode, status: 'active' }).select('_id').lean()
+  const dayStart = new Date()
+  dayStart.setUTCHours(0, 0, 0, 0)
+  const dailyPurchase = directMembers.length ? await PlanApplication.exists({ userId: { $in: directMembers.map((member) => member._id) }, status: 'accepted', reviewedAt: { $gte: dayStart } }) : false
+  const policy = settings?.rewards || {}
+  const claims = await RewardClaim.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(100).lean()
+  res.json({
+    policy: {
+      enabled: Boolean(policy.enabled),
+      welcomeBonusPaise: Number(policy.welcomeBonusPaise || 0),
+      referralRates: [Number(policy.referralLevel1Pct || 0), Number(policy.referralLevel2Pct || 0), Number(policy.referralLevel3Pct || 0)],
+      teamMilestonePaise: Number(policy.teamMilestonePaise || 0),
+      teamMilestoneRewardPaise: Number(policy.teamMilestoneRewardPaise || 0),
+      dailyInvitePaise: Number(policy.dailyInvitePaise || 0),
+    },
+    eligibility: {
+      welcome: Boolean(acceptedDeposit && acceptedApplication),
+      teamMilestone: team.reduce((sum, level) => sum + level.investedPaise, 0) >= Number(policy.teamMilestonePaise || 0) && Number(policy.teamMilestonePaise || 0) > 0,
+      dailyInvite: Boolean(dailyPurchase),
+    },
+    claims,
+  })
+}))
+
+router.post('/rewards/claim', requireAuth, asyncRoute(async (req, res) => {
+  const parsed = z.object({ kind: z.enum(['welcome_bonus', 'team_milestone', 'daily_invite']) }).safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ error: 'Choose an available reward.' })
+  const settings = await PlatformSettings.findOne({ key: 'main' }).lean()
+  const policy = settings?.rewards || {}
+  if (!policy.enabled) return res.status(409).json({ error: 'Reward claims are not enabled by the administrator.' })
+  let amountPaise = 0
+  let claimKey = ''
+  let eligible = false
+  if (parsed.data.kind === 'welcome_bonus') {
+    amountPaise = Number(policy.welcomeBonusPaise || 0)
+    const [deposit, application] = await Promise.all([
+      Deposit.exists({ userId: req.user._id, status: 'accepted' }),
+      PlanApplication.exists({ userId: req.user._id, status: 'accepted' }),
+    ])
+    eligible = Boolean(deposit && application)
+    claimKey = 'welcome:' + req.user._id
+  } else if (parsed.data.kind === 'team_milestone') {
+    amountPaise = Number(policy.teamMilestoneRewardPaise || 0)
+    const levels = await teamLevelsFor(req.user)
+    const invested = levels.reduce((sum, level) => sum + level.investedPaise, 0)
+    eligible = Number(policy.teamMilestonePaise || 0) > 0 && invested >= Number(policy.teamMilestonePaise || 0)
+    claimKey = 'team:' + req.user._id + ':' + String(policy.teamMilestonePaise || 0)
+  } else {
+    amountPaise = Number(policy.dailyInvitePaise || 0)
+    const directMembers = await User.find({ referredBy: req.user.referralCode, status: 'active' }).select('_id').lean()
+    const dayStart = new Date()
+    dayStart.setUTCHours(0, 0, 0, 0)
+    const qualifyingPurchase = directMembers.length ? await PlanApplication.exists({ userId: { $in: directMembers.map((member) => member._id) }, status: 'accepted', reviewedAt: { $gte: dayStart } }) : false
+    eligible = Boolean(qualifyingPurchase)
+    claimKey = 'daily:' + req.user._id + ':' + dayStart.toISOString().slice(0, 10)
+  }
+  if (!amountPaise || !eligible) return res.status(409).json({ error: 'This reward is not available for your account yet.' })
+  const existing = await RewardClaim.findOne({ claimKey })
+  if (existing) return res.status(409).json({ error: 'A claim for this reward already exists.' })
+  const claim = await RewardClaim.create({ claimKey, userId: req.user._id, amountPaise, kind: parsed.data.kind })
+  res.status(201).json({ claim, message: 'Reward claim submitted for administrator review.' })
+}))
+
+router.get('/support/unread-count', requireAuth, asyncRoute(async (req, res) => {
+  const count = await SupportMessage.countDocuments({ userId: req.user._id, senderRole: 'admin', readAt: null })
+  res.json({ count })
 }))
 
 router.get('/support/messages', requireAuth, asyncRoute(async (req, res) => {
