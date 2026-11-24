@@ -30,7 +30,8 @@ function publicPlan(plan) {
   const cycle = plan.cycle || 'monthly'
   const durationDays = Number(plan.durationDays || 30)
   const profitReturnPaise = Number(plan.profitReturnPaise || 0)
-  const termsReady = Boolean(plan.pricePaise > 0 && plan.cycle && Number(plan.durationDays) > 0 && profitReturnPaise > 0)
+  const dailyProfitPaise = Number(plan.dailyProfitPaise ?? Math.floor(profitReturnPaise / Math.max(1, durationDays)))
+  const termsReady = Boolean(plan.pricePaise > 0 && plan.cycle && durationDays > 0 && dailyProfitPaise > 0 && profitReturnPaise > 0)
   const periods = cycle === 'one_time' ? 1 : Math.max(1, Math.ceil(durationDays / planCycleDays(cycle)))
   return {
     id: plan._id.toString(),
@@ -46,8 +47,10 @@ function publicPlan(plan) {
     purchaseLimit: Math.max(1, Number(plan.purchaseLimit) || 2),
     termsReady,
     investmentRoiPct: plan.investmentRoiPct ?? 0,
+    dailyProfitPaise,
     profitReturnPaise,
     profitPerCyclePaise: Math.floor(profitReturnPaise / periods),
+    dailyProfit: asRupees(dailyProfitPaise),
     profitReturn: asRupees(profitReturnPaise),
     riskLabel: plan.riskLabel,
     termsUrl: plan.termsUrl,

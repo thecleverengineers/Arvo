@@ -19,7 +19,7 @@ const planInput = z.object({
   durationDays: z.coerce.number().int().min(1).max(36500).default(30),
   purchaseLimit: z.coerce.number().int().min(1).max(1000).default(2),
   investmentRoiPct: z.coerce.number().min(0).max(10000).default(0),
-  profitReturn: z.union([z.number(), z.string()]).default(0),
+  dailyProfit: z.union([z.number(), z.string()]).default(0),
   riskLabel: z.string().trim().max(80).default('See plan documents'),
   termsUrl: z.string().trim().max(1000).default(''),
   imageUrl: z.string().max(600_000).default(''),
@@ -63,20 +63,21 @@ async function queueReferralRewards(session, application) {
 function parsePlan(body, { requirePrice = false } = {}) {
   const parsed = planInput.safeParse(body)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
-  const { price, profitReturn, ...planData } = parsed.data
+  const { price, dailyProfit, ...planData } = parsed.data
   let pricePaise
-  const profitReturnAmount = Number(profitReturn)
-  if (!Number.isFinite(profitReturnAmount) || profitReturnAmount < 0 || profitReturnAmount > 10_000_000_000) return { error: 'Enter a valid non-negative profit return in USDT.' }
-  const profitReturnPaise = Math.round(profitReturnAmount * 100)
+  const dailyProfitPaise = Number(dailyProfit) === 0 ? 0 : toPaise(dailyProfit)
+  if (dailyProfitPaise === null || dailyProfitPaise < 0) return { error: 'Enter a valid non-negative daily profit in USDT.' }
+  const profitReturnPaise = dailyProfitPaise * planData.durationDays
+  if (!Number.isSafeInteger(profitReturnPaise) || profitReturnPaise > 1_000_000_000_000) return { error: 'Calculated total profit is too large.' }
   if (price !== undefined && price !== null) {
     pricePaise = toPaise(price)
-    if (!pricePaise) return { error: 'Enter a valid fixed price in USDT.' }
+    if (!pricePaise) return { error: 'Enter a valid fixed investment amount in USDT.' }
   } else if (requirePrice) {
-    return { error: 'Enter a valid fixed price in USDT.' }
+    return { error: 'Enter a valid fixed investment amount in USDT.' }
   }
   if (planData.termsUrl && !/^https:\/\//i.test(planData.termsUrl)) return { error: 'Plan document links must use HTTPS.' }
   if (planData.imageUrl && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(planData.imageUrl)) return { error: 'Upload a valid JPEG plan image.' }
-  return { data: { ...planData, profitReturnPaise, ...(pricePaise ? { pricePaise } : {}) } }
+  return { data: { ...planData, dailyProfitPaise, profitReturnPaise, ...(pricePaise ? { pricePaise } : {}) } }
 }
 
 router.get('/overview', asyncRoute(async (_req, res) => {
@@ -115,25 +116,7 @@ router.patch('/users/:id', asyncRoute(async (req, res) => {
 
 router.get('/plans', asyncRoute(async (_req, res) => {
   const plans = await InvestmentPlan.find().sort({ createdAt: -1 }).lean()
-  res.json({ plans: plans.map((plan) => ({ ...plan, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, profitReturn: asRupees(plan.profitReturnPaise || 0) })) })
-}))
-
-router.post('/plans/powerbank-templates', asyncRoute(async (req, res) => {
-  const templates = [
-    { suffix: '01', name: 'Arvo Power Bank 01 · Pocket', summary: 'A compact everyday power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-01-pocket' },
-    { suffix: '02', name: 'Arvo Power Bank 02 · Slim', summary: 'A slim portable power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-02-slim' },
-    { suffix: '03', name: 'Arvo Power Bank 03 · Fast Charge', summary: 'A fast-charge power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-03-fast-charge' },
-    { suffix: '04', name: 'Arvo Power Bank 04 · Rugged', summary: 'A rugged-use power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-04-rugged' },
-    { suffix: '05', name: 'Arvo Power Bank 05 · Solar', summary: 'A solar-assisted power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-05-solar' },
-    { suffix: '06', name: 'Arvo Power Bank 06 · Max', summary: 'A high-capacity power bank. Add verified specifications and investment terms.', slug: 'arvo-power-bank-06-max' },
-  ]
-  const plans = await Promise.all(templates.map((item) => InvestmentPlan.findOneAndUpdate(
-    { slug: item.slug },
-    { $setOnInsert: { name: item.name, slug: item.slug, category: 'Power bank', summary: item.summary, details: 'Administrator: add exact hardware specifications, a fixed USDT price, cycle, duration, ROI, profit return and a product image before publishing.', pricePaise: 0, cycle: 'monthly', durationDays: 30, investmentRoiPct: 0, profitReturnPaise: 0, riskLabel: 'Publish complete product and risk information before opening applications.', termsUrl: '', imageUrl: '', comingSoon: true, isActive: false, createdBy: req.user._id } },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  )))
-  await AuditLog.create({ actorId: req.user._id, action: 'plan.powerbankTemplates.created', targetType: 'investmentPlan', targetId: plans[0]._id, details: { count: plans.length } })
-  res.json({ plans, count: plans.length })
+  res.json({ plans: plans.map((plan) => ({ ...plan, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, dailyProfit: asRupees(plan.dailyProfitPaise || 0), profitReturn: asRupees(plan.profitReturnPaise || 0) })) })
 }))
 
 router.post('/plans', asyncRoute(async (req, res) => {
@@ -141,7 +124,7 @@ router.post('/plans', asyncRoute(async (req, res) => {
   if (parsed.error) return res.status(400).json({ error: parsed.error })
   const plan = await InvestmentPlan.create({ ...parsed.data, createdBy: req.user._id })
   await AuditLog.create({ actorId: req.user._id, action: 'plan.created', targetType: 'investmentPlan', targetId: plan._id, details: { slug: plan.slug } })
-  res.status(201).json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null, profitReturn: asRupees(plan.profitReturnPaise || 0) } })
+  res.status(201).json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null, dailyProfit: asRupees(plan.dailyProfitPaise || 0), profitReturn: asRupees(plan.profitReturnPaise || 0) } })
 }))
 
 router.patch('/plans/:id', asyncRoute(async (req, res) => {
@@ -153,7 +136,7 @@ router.patch('/plans/:id', asyncRoute(async (req, res) => {
   if (parsed.data.isActive && !nextPricePaise) return res.status(400).json({ error: 'Set a fixed price before publishing this plan.' })
   const plan = await InvestmentPlan.findByIdAndUpdate(req.params.id, parsed.data, { new: true, runValidators: true })
   await AuditLog.create({ actorId: req.user._id, action: 'plan.updated', targetType: 'investmentPlan', targetId: plan._id, details: { slug: plan.slug } })
-  res.json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null, profitReturn: asRupees(plan.profitReturnPaise || 0) } })
+  res.json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null, dailyProfit: asRupees(plan.dailyProfitPaise || 0), profitReturn: asRupees(plan.profitReturnPaise || 0) } })
 }))
 
 router.get('/deposits', asyncRoute(async (req, res) => {

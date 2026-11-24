@@ -35,6 +35,7 @@ const planSchema = new Schema({
   durationDays: { type: Number, min: 1, max: 36500, default: 30 },
   purchaseLimit: { type: Number, min: 1, max: 1000, default: 2 },
   investmentRoiPct: { type: Number, min: 0, max: 10000, default: 0 },
+  dailyProfitPaise: { type: Number, min: 0, max: 1_000_000_000_000, default: 0 },
   profitReturnPaise: { type: Number, min: 0, max: 1_000_000_000_000, default: 0 },
   riskLabel: { type: String, trim: true, maxlength: 80, default: 'See plan documents' },
   termsUrl: { type: String, trim: true, maxlength: 1000, default: '' },
