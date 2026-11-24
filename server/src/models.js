@@ -17,7 +17,7 @@ const userSchema = new Schema({
 
 const walletSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true, index: true },
-  currency: { type: String, enum: ['INR'], default: 'INR' },
+  currency: { type: String, enum: ['INR', 'USDT'], default: 'USDT' },
   availablePaise: { type: Number, default: 0, min: 0 },
   investedPaise: { type: Number, default: 0, min: 0 },
   reservedPaise: { type: Number, default: 0, min: 0 },

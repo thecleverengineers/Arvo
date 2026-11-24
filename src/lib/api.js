@@ -23,7 +23,8 @@ export async function api(path, options = {}) {
   return payload
 }
 
-export function formatINR(valueOrPaise, inPaise = false) {
-  const amount = inPaise ? Number(valueOrPaise || 0) / 100 : Number(valueOrPaise || 0)
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(amount)
+export function formatUSDT(valueOrCents, inCents = false) {
+  const amount = inCents ? Number(valueOrCents || 0) / 100 : Number(valueOrCents || 0)
+  const formatted = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
+  return `USDT ${formatted}`
 }

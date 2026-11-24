@@ -10,7 +10,7 @@ import { isDemoAuth, sendOtp, verifyOtp } from '../fast2sms.js'
 const router = Router()
 const mobileSchema = z.string().regex(/^\d{10}$/)
 const idempotencySchema = z.string().trim().regex(/^[A-Za-z0-9._:-]{8,128}$/)
-const amountError = { error: 'Enter an amount in rupees with up to two decimal places.' }
+const amountError = { error: 'Enter an amount in USDT with up to two decimal places.' }
 const mpinLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 6, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: 'Too many MPIN verification attempts. Try again later.' } })
 
 function getRequestKey(req, res) {
@@ -129,7 +129,7 @@ router.get('/wallet', requireAuth, asyncRoute(async (req, res) => {
     PlanApplication.find({ userId: req.user._id }).populate('planId', 'name').sort({ createdAt: -1 }).limit(20).lean(),
   ])
   res.json({
-    wallet: { availablePaise: wallet.availablePaise, investedPaise: wallet.investedPaise, reservedPaise: wallet.reservedPaise, available: asRupees(wallet.availablePaise), invested: asRupees(wallet.investedPaise), reserved: asRupees(wallet.reservedPaise) },
+    wallet: { currency: 'USDT', availablePaise: wallet.availablePaise, investedPaise: wallet.investedPaise, reservedPaise: wallet.reservedPaise, available: asRupees(wallet.availablePaise), invested: asRupees(wallet.investedPaise), reserved: asRupees(wallet.reservedPaise) },
     transactions,
     deposits,
     withdrawals,
@@ -233,7 +233,7 @@ router.post('/plans/:id/apply', requireAuth, asyncRoute(async (req, res) => {
   const amountPaise = toPaise(req.body?.amount)
   if (!amountPaise) return res.status(400).json(amountError)
   if (!plan.pricePaise) return res.status(409).json({ error: 'This plan does not have a price yet.' })
-  if (amountPaise !== plan.pricePaise) return res.status(400).json({ error: `This plan has a fixed price of ₹${asRupees(plan.pricePaise).toLocaleString('en-IN')}.` })
+  if (amountPaise !== plan.pricePaise) return res.status(400).json({ error: `This plan has a fixed price of USDT ${asRupees(plan.pricePaise).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.` })
   const application = await PlanApplication.create({ userId: req.user._id, planId: plan._id, requestKey, amountPaise })
   res.status(201).json({ application })
 }))

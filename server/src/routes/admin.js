@@ -31,13 +31,13 @@ function parsePlan(body, { requirePrice = false } = {}) {
   const { price, profitReturn, ...planData } = parsed.data
   let pricePaise
   const profitReturnAmount = Number(profitReturn)
-  if (!Number.isFinite(profitReturnAmount) || profitReturnAmount < 0 || profitReturnAmount > 10_000_000_000) return { error: 'Enter a valid non-negative profit return in rupees.' }
+  if (!Number.isFinite(profitReturnAmount) || profitReturnAmount < 0 || profitReturnAmount > 10_000_000_000) return { error: 'Enter a valid non-negative profit return in USDT.' }
   const profitReturnPaise = Math.round(profitReturnAmount * 100)
   if (price !== undefined && price !== null) {
     pricePaise = toPaise(price)
-    if (!pricePaise) return { error: 'Enter a valid fixed price in rupees.' }
+    if (!pricePaise) return { error: 'Enter a valid fixed price in USDT.' }
   } else if (requirePrice) {
-    return { error: 'Enter a valid fixed price in rupees.' }
+    return { error: 'Enter a valid fixed price in USDT.' }
   }
   if (planData.termsUrl && !/^https:\/\//i.test(planData.termsUrl)) return { error: 'Plan document links must use HTTPS.' }
   if (planData.imageUrl && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(planData.imageUrl)) return { error: 'Upload a valid JPEG plan image.' }
