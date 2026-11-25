@@ -64,7 +64,6 @@ export function safeUser(user, { includeAvatar = false } = {}) {
     emailVerified: Boolean(user.emailVerifiedAt),
     role: user.role,
     status: user.status,
-    profileStatus: user.profileStatus,
     mpinSet: Boolean(user.mpinHash),
     referralCode: user.referralCode,
     createdAt: user.createdAt,
