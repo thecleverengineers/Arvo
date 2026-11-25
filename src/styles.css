@@ -328,15 +328,15 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
   .section-block { margin-top: 31px; }
   .section-heading { align-items: center; margin-bottom: 13px; }
   .section-heading h2 { font-size: 19px; }
-  .home-plans { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(245px, 84%); grid-template-columns: none; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; padding: 1px 1px 9px; }
-  .home-plans .plan-card { display: grid; grid-template-columns: 91px minmax(0, 1fr); min-height: 137px; scroll-snap-align: start; border-radius: 16px; }
-  .home-plans .plan-art { height: 100%; min-height: 137px; padding: 12px; }
+  .home-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row; grid-auto-columns: auto; gap: 10px; overflow: visible; overscroll-behavior-x: auto; scroll-snap-type: none; padding: 1px 0 9px; }
+  .home-plans .plan-card { display: flex; min-width: 0; min-height: 0; flex-direction: column; scroll-snap-align: none; border-radius: 16px; }
+  .home-plans .plan-art { height: 150px; min-height: 150px; padding: 11px; }
   .home-plans .plan-symbol { width: 35px; height: 35px; }
   .home-plans .plan-art-label { max-width: 70px; font-size: 6px; }
   .home-plans .plan-card-body { min-width: 0; padding: 13px 12px; }
   .home-plans .plan-card-body .eyebrow { font-size: 8px; }
   .home-plans .plan-title-row h3 { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-  .home-plans .plan-card-body p { min-height: 0; margin-bottom: 10px; font-size: 10px; line-height: 1.4; }
+  .home-plans .plan-card-body p { min-height: 48px; margin-bottom: 10px; font-size: 10px; line-height: 1.4; }
   .home-plans .plan-meta { flex-wrap: wrap; font-size: 9px; gap: 5px; }
   .home-plans .plan-meta b { display: inline; }
   .transaction-list { padding: 2px 13px; }
@@ -479,3 +479,36 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
  .my-history-copy strong { font-size:9px; }
  .my-history-copy span,.my-history-copy small { font-size:7px; }
 }
+
+/* Home jewelry image carousel */
+.jewelry-carousel { margin: 19px 0 7px; }
+.jewelry-carousel-slide { position: relative; min-height: 220px; overflow: hidden; display: block; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: 18px; background: var(--deep); box-shadow: var(--shadow); isolation: isolate; }
+.jewelry-carousel-slide { touch-action: pan-y; }
+.jewelry-carousel-image { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.jewelry-carousel-shade { position: absolute; z-index: -1; inset: 0; background: linear-gradient(90deg, rgba(3,18,14,.86) 0%, rgba(3,18,14,.58) 45%, rgba(3,18,14,.08) 100%), linear-gradient(0deg, rgba(3,18,14,.38), transparent 50%); }
+.jewelry-carousel-copy { position: absolute; left: clamp(17px, 4vw, 30px); bottom: 34px; width: min(62%, 390px); color: #fff; }
+.jewelry-carousel-copy .eyebrow { color: #e2c982; font-size: 8px; }
+.jewelry-carousel-copy h2 { margin: 7px 0 5px; font: 600 clamp(17px, 2.3vw, 24px) 'Manrope',sans-serif; line-height: 1.18; letter-spacing: -.04em; }
+.jewelry-carousel-copy p { display: -webkit-box; overflow: hidden; margin: 0; color: rgba(255,255,255,.78); font-size: 10px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.jewelry-carousel-link { display: inline-flex; align-items: center; gap: 3px; margin-top: 10px; color: #f1d889; font-size: 9px; font-weight: 700; text-decoration: none; }
+.jewelry-carousel-count { position: absolute; top: 14px; right: 17px; padding: 5px 8px; border: 1px solid rgba(255,255,255,.3); border-radius: 99px; color: #fff; background: rgba(5,19,14,.42); font-size: 8px; backdrop-filter: blur(7px); }
+.jewelry-carousel-controls { position: absolute; right: 13px; bottom: 14px; display: flex; gap: 6px; }
+.jewelry-carousel-controls button { width: 31px; height: 31px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.43); border-radius: 50%; color: white; background: rgba(5,19,14,.38); cursor: pointer; backdrop-filter: blur(7px); }
+.jewelry-carousel-controls button:first-child svg { transform: rotate(180deg); }
+.jewelry-carousel-dots { position: absolute; left: 18px; bottom: 14px; display: flex; align-items: center; gap: 5px; max-width: calc(100% - 100px); overflow: hidden; }
+.jewelry-carousel-dots button { width: 6px; height: 6px; flex: 0 0 6px; padding: 0; border: 0; border-radius: 99px; background: rgba(255,255,255,.5); cursor: pointer; transition: width .2s ease, background .2s ease; }
+.jewelry-carousel-dots button.active { width: 19px; flex-basis: 19px; background: #e4c77a; }
+@media (max-width: 640px) {
+  .jewelry-carousel { margin-top: 15px; }
+  .jewelry-carousel-slide { min-height: 190px; border-radius: 15px; }
+  .jewelry-carousel-copy { left: 15px; bottom: 38px; width: 66%; }
+  .jewelry-carousel-copy h2 { font-size: 17px; }
+  .jewelry-carousel-copy p { font-size: 8px; }
+  .jewelry-carousel-copy .eyebrow { font-size: 7px; }
+  .jewelry-carousel-count { top: 10px; right: 10px; }
+  .jewelry-carousel-controls { right: 10px; bottom: 10px; }
+  .jewelry-carousel-controls button { width: 27px; height: 27px; }
+  .jewelry-carousel-dots { left: 14px; bottom: 12px; }
+}
+.carousel-limit-note { margin: 0 0 12px; color: var(--muted); font-size: 10px; }
+.carousel-image-preview { display: block; width: 100%; max-height: 230px; border: 1px solid var(--border); border-radius: 11px; background: var(--page); object-fit: cover; }
