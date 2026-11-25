@@ -461,7 +461,7 @@ const contentInput = z.object({
   title: z.string().trim().min(2).max(160),
   slug: z.string().trim().min(2).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   body: z.string().trim().max(12000).default(''),
-  imageUrl: z.string().trim().max(1000).default(''),
+  imageUrl: z.string().trim().max(600000).default(''),
   language: z.string().trim().toLowerCase().min(2).max(12).default('en'),
   sortOrder: z.coerce.number().int().min(0).max(100000).default(0),
   isPublished: z.boolean().default(false),
@@ -471,10 +471,19 @@ const contentInput = z.object({
 function parseContent(input) {
   const parsed = contentInput.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
-  if (parsed.data.imageUrl && !/^https:\/\//i.test(parsed.data.imageUrl)) return { error: 'Content image links must use HTTPS.' }
+  const embeddedImage = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(parsed.data.imageUrl)
+  if (parsed.data.imageUrl && !/^https:\/\//i.test(parsed.data.imageUrl) && !embeddedImage) return { error: 'Content image links must use HTTPS or be uploaded as an image.' }
+  if (parsed.data.type === 'banner' && parsed.data.isPublished && !parsed.data.imageUrl) return { error: 'Add an image before publishing a carousel slide.' }
   const targetUrl = typeof parsed.data.metadata?.url === 'string' ? parsed.data.metadata.url.trim() : ''
   if (targetUrl && !/^(https:\/\/|mailto:|tel:)/i.test(targetUrl)) return { error: 'Content links must use HTTPS, email or telephone format.' }
   return { data: parsed.data }
+}
+
+async function bannerLimitReached(data, excludeId) {
+  if (data.type !== 'banner') return false
+  const filter = { type: 'banner' }
+  if (excludeId) filter._id = { $ne: excludeId }
+  return (await ContentItem.countDocuments(filter)) >= 10
 }
 
 router.get('/content', asyncRoute(async (req, res) => {
@@ -487,6 +496,7 @@ router.get('/content', asyncRoute(async (req, res) => {
 router.post('/content', asyncRoute(async (req, res) => {
   const parsed = parseContent(req.body)
   if (parsed.error) return res.status(400).json({ error: parsed.error })
+  if (await bannerLimitReached(parsed.data)) return res.status(409).json({ error: 'A maximum of 10 carousel images is allowed. Delete an image before adding another.' })
   const item = await ContentItem.create({ ...parsed.data, createdBy: req.user._id })
   await AuditLog.create({ actorId: req.user._id, action: 'content.created', targetType: parsed.data.type, targetId: item._id, details: { slug: item.slug } })
   res.status(201).json({ item })
@@ -495,6 +505,9 @@ router.post('/content', asyncRoute(async (req, res) => {
 router.patch('/content/:id', asyncRoute(async (req, res) => {
   const parsed = parseContent(req.body)
   if (parsed.error) return res.status(400).json({ error: parsed.error })
+  const existing = await ContentItem.findById(req.params.id).select('_id')
+  if (!existing) return res.status(404).json({ error: 'Content item not found.' })
+  if (await bannerLimitReached(parsed.data, existing._id)) return res.status(409).json({ error: 'A maximum of 10 carousel images is allowed. Delete an image before adding another.' })
   const item = await ContentItem.findByIdAndUpdate(req.params.id, parsed.data, { new: true, runValidators: true })
   if (!item) return res.status(404).json({ error: 'Content item not found.' })
   await AuditLog.create({ actorId: req.user._id, action: 'content.updated', targetType: item.type, targetId: item._id, details: { slug: item.slug } })
