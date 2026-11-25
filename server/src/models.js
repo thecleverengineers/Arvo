@@ -10,7 +10,6 @@ const userSchema = new Schema({
   emailVerifiedAt: { type: Date, default: null },
   role: { type: String, enum: ['user', 'admin'], default: 'user', index: true },
   status: { type: String, enum: ['active', 'blocked'], default: 'active', index: true },
-  profileStatus: { type: String, enum: ['not_started', 'pending', 'verified', 'rejected'], default: 'not_started' },
   referralCode: { type: String, unique: true, index: true },
   referredBy: { type: String, default: '', index: true },
   passwordHash: { type: String, default: '', select: false },
