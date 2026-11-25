@@ -688,7 +688,7 @@ function TeamPage({ team, onShare, onOpenIncome }) {
       transfer_out: 'Wallet transfer sent',
     }
     return <>
-      <PageHeading eyebrow={`LEVEL ${selectedLevel} MEMBERS`} title="Team members" subtitle="Member contact details and recent account activity for this referral level." action={<button type="button" className="outline-button" onClick={() => setSelectedLevel(null)}><Icon name="chevron" size={16}/> Back to levels</button>}/>
+      <PageHeading eyebrow={`LEVEL ${selectedLevel} MEMBERS`} title="Team members" subtitle="Member contact details and recent account activity for this referral level." action={<button type="button" className="outline-button" onClick={() => setSelectedLevel(null)}>← Back to levels</button>}/>
       <section className="team-members-summary">
         <div><span className="eyebrow">LEVEL ${selectedLevel}</span><strong>{memberData.totalMembers || 0} members</strong></div>
         <span>{memberData.totalMembers ? `Showing ${firstMember}–${lastMember}` : 'No members in this level yet'}</span>
