@@ -337,8 +337,7 @@ function EmptyState({ title, description, action }) { return <div className="emp
 function StatusPill({ status }) { const label = status?.replaceAll('_', ' ') || 'pending'; return <span className={`status-pill state-${label.replaceAll(' ', '-')}`}>{label}</span> }
 
 function SignedOutPage({ plans, onSignIn, onSignUp, onBrowse, onOpenPlan }) {
-  const orderedPlans = orderPlanCatalog(plans)
-  return <div className="signed-out-page"><section className="signed-out-copy"><span className="eyebrow">WEALTH, THOUGHTFULLY</span><h1>A clearer view of your financial journey<span className="greeting-dot">.</span></h1><p>Explore available plans, manage requests and keep your account details in one considered place.</p><div className="signed-out-actions"><button className="primary-button" onClick={onSignUp}>Create your Arvo account <Icon name="chevron" size={17}/></button><button className="text-button" onClick={onBrowse}>Explore plans</button><button className="text-button" onClick={onSignIn}>Already a member? Sign in</button></div><div className="trust-note"><Icon name="lock" size={16}/> Secure access with mobile verification</div></section><aside className="signed-out-panel"><div className="signed-panel-top"><span className="brand-mark">A</span><span className="eyebrow">ARVO ACCOUNT</span></div><div className="signed-panel-orbit"><span/><span/><strong>A</strong></div><div className="signed-panel-foot"><span>Personal dashboard</span><span>Plans · Wallet · Referrals</span></div></aside><section className="public-plans-preview"><div className="section-heading"><div><span className="eyebrow">EXPLORE ARVO</span><h2>Available investment plans</h2></div><button className="inline-link" onClick={onBrowse}>View plans <Icon name="chevron" size={15}/></button></div>{orderedPlans.length ? <div className="plan-grid home-plans">{orderedPlans.map((plan, index) => <PlanCard plan={plan} index={index} key={plan.id} onOpen={onOpenPlan}/>)}</div> : <p className="muted-line">Plans will appear here when published by the administrator.</p>}</section></div>
+  return <div className="signed-out-page"><section className="signed-out-copy"><span className="eyebrow">WEALTH, THOUGHTFULLY</span><h1>A clearer view of your financial journey<span className="greeting-dot">.</span></h1><p>Explore available plans, manage requests and keep your account details in one considered place.</p><div className="signed-out-actions"><button className="primary-button" onClick={onSignUp}>Create your Arvo account <Icon name="chevron" size={17}/></button><button className="text-button" onClick={onBrowse}>Explore plans</button><button className="text-button" onClick={onSignIn}>Already a member? Sign in</button></div><div className="trust-note"><Icon name="lock" size={16}/> Secure access with mobile verification</div></section><aside className="signed-out-panel"><div className="signed-panel-top"><span className="brand-mark">A</span><span className="eyebrow">ARVO ACCOUNT</span></div><div className="signed-panel-orbit"><span/><span/><strong>A</strong></div><div className="signed-panel-foot"><span>Personal dashboard</span><span>Plans · Wallet · Referrals</span></div></aside><section className="public-plans-preview"><div className="section-heading"><div><span className="eyebrow">EXPLORE ARVO</span><h2>Available investment plans</h2></div><button className="inline-link" onClick={onBrowse}>View plans <Icon name="chevron" size={15}/></button></div>{plans.length ? <PlanCatalog plans={plans} onOpenPlan={onOpenPlan}/> : <p className="muted-line">Plans will appear here when published by the administrator.</p>}</section></div>
 }
 
 async function compressPlanImage(file, maxLength = 600000) {
@@ -394,6 +393,38 @@ function orderPlanCatalog(plans) {
   })
 }
 
+function PlanCatalog({ plans, onOpenPlan, wallet }) {
+  const [selectedCategory, setSelectedCategory] = useState('Daily')
+  const [currentPage, setCurrentPage] = useState(1)
+  const perPage = 4
+  const categories = ['Daily', 'VIP']
+  const categoryPlans = orderPlanCatalog(plans.filter((plan) => plan.category === selectedCategory))
+  const pageCount = Math.max(1, Math.ceil(categoryPlans.length / perPage))
+  const page = Math.min(currentPage, pageCount)
+  const startIndex = (page - 1) * perPage
+  const visiblePlans = categoryPlans.slice(startIndex, startIndex + perPage)
+
+  function selectCategory(category) {
+    setSelectedCategory(category)
+    setCurrentPage(1)
+  }
+
+  return <>
+    <div className="plan-category-tabs" role="tablist" aria-label="Plan categories">
+      {categories.map((category) => <button type="button" role="tab" aria-selected={selectedCategory === category} className={selectedCategory === category ? 'selected' : ''} key={category} onClick={() => selectCategory(category)}>{category}<span className="plan-category-count">{plans.filter((plan) => plan.category === category).length}</span></button>)}
+    </div>
+    {visiblePlans.length ? <div className="plan-grid home-plans">{visiblePlans.map((plan, index) => <PlanCard key={plan.id} plan={plan} index={index} wallet={wallet} onOpen={onOpenPlan}/>)}</div> : <EmptyState title={`No ${selectedCategory} plans yet`} description="Published plans in this category will appear here."/>}
+    {categoryPlans.length > perPage && <div className="plan-pagination" aria-label={`${selectedCategory} plan pages`}>
+      <div className="plan-pagination-controls">
+        <button type="button" className="plan-page-arrow previous" onClick={() => setCurrentPage((value) => Math.max(1, value - 1))} disabled={page === 1} aria-label="Previous plan page"><Icon name="chevron" size={15}/></button>
+        {Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => <button type="button" key={pageNumber} className={`plan-page-number ${page === pageNumber ? 'selected' : ''}`} onClick={() => setCurrentPage(pageNumber)} aria-label={`Page ${pageNumber}`} aria-current={page === pageNumber ? 'page' : undefined}>{String(pageNumber).padStart(2, '0')}</button>)}
+        <button type="button" className="plan-page-arrow" onClick={() => setCurrentPage((value) => Math.min(pageCount, value + 1))} disabled={page === pageCount} aria-label="Next plan page"><Icon name="chevron" size={15}/></button>
+      </div>
+      <div className="plan-pagination-summary"><strong>{startIndex + 1}–{Math.min(startIndex + perPage, categoryPlans.length)}</strong><span> OF {categoryPlans.length} PLANS</span></div>
+    </div>}
+  </>
+}
+
 function PowerBankArt({ variant = 0 }) {
   const normalizedVariant = ((Number(variant) % powerBankColorways.length) + powerBankColorways.length) % powerBankColorways.length
   const palette = powerBankColorways[normalizedVariant]
@@ -446,7 +477,6 @@ function HomePage({ user, wallet, referrals, plans, news, banners, onOpenPlan, s
   const reserved = wallet?.wallet?.reservedPaise || 0
   const total = available + invested + reserved
   const transactions = wallet?.transactions || []
-  const orderedPlans = orderPlanCatalog(plans)
   return <>
     <section className="welcome-row"><div><span className="eyebrow">YOUR ARVO OVERVIEW</span><h1>Welcome, {user.name?.split(' ')[0] || 'there'}<span className="greeting-dot">.</span></h1><p>Your account activity, clearly brought together.</p></div><button className="help-link" onClick={() => setPage('Support')}><Icon name="help" size={17}/> Live chat support</button></section>
     <section className="hero-grid"><div className="balance-card"><div className="balance-card-top"><span className="balance-label"><span className="live-dot"/> ACCOUNT VALUE</span><Icon name="spark" size={17}/></div><div className="balance-value">{formatUSDT(total / 100)}</div><div className="balance-change"><span>Available balance + active plan value + reserved requests</span></div><div className="balance-footer"><div><span>Invested</span><strong>{formatUSDT(invested, true)}</strong></div><div><span>Available</span><strong>{formatUSDT(available, true)}</strong></div><button className="balance-arrow" onClick={() => setPage('Wallet')} aria-label="View wallet"><Icon name="chevron" size={20}/></button></div><div className="hero-line" aria-hidden="true"><svg viewBox="0 0 560 110" preserveAspectRatio="none"><path d="M0 93 C38 83 42 58 76 66 S119 87 153 65 198 41 229 58 275 75 305 48 352 39 382 47 426 26 460 38 503 14 560 9" fill="none" stroke="currentColor" strokeWidth="2"/></svg></div></div><div className="side-cards"><div className="small-stat-card"><div className="stat-card-top"><span className="stat-icon"><Icon name="wallet" size={18}/></span><span className="eyebrow">RESERVED</span></div><strong>{formatUSDT(reserved, true)}</strong><span className="stat-caption">Withdrawal requests under review</span></div><div className="small-stat-card second-stat"><div className="stat-card-top"><span className="stat-icon lavender"><Icon name="layers" size={18}/></span><span className="eyebrow">ACTIVE PLANS</span></div><strong>{wallet?.positions?.length || 0}</strong><button className="inline-link" onClick={() => setPage('Plans')}>View plans <Icon name="chevron" size={14}/></button></div></div></section>
@@ -457,7 +487,7 @@ function HomePage({ user, wallet, referrals, plans, news, banners, onOpenPlan, s
       <button className="quick-action" onClick={() => setPage('Support')}><span className="quick-action-icon"><Icon name="help" size={19}/></span><span>Support</span></button>
     </section>
     {banners.length > 0 && <JewelryCarousel items={banners}/>}
-    <section className="section-block"><div className="section-heading"><div><span className="eyebrow">INVESTMENT PLANS</span><h2>Available plans</h2></div><button className="inline-link" onClick={() => setPage('Plans')}>View all <Icon name="chevron" size={15}/></button></div>{orderedPlans.length ? <div className="plan-grid home-plans">{orderedPlans.map((plan, index) => <PlanCard key={plan.id} plan={plan} index={index} wallet={wallet} compact onOpen={onOpenPlan}/>)}</div> : <EmptyState title="No plans are published yet" description="Published plans will appear here with their own profile and terms."/>}</section>
+    <section className="section-block"><div className="section-heading"><div><span className="eyebrow">INVESTMENT PLANS</span><h2>Available plans</h2></div><button className="inline-link" onClick={() => setPage('Plans')}>View all <Icon name="chevron" size={15}/></button></div>{plans.length ? <PlanCatalog plans={plans} wallet={wallet} onOpenPlan={onOpenPlan}/> : <EmptyState title="No plans are published yet" description="Published plans will appear here with their own profile and terms."/>}</section>
     <section className="section-block activity-block"><div className="section-heading"><div><span className="eyebrow">ACCOUNT LEDGER</span><h2>Recent activity</h2></div><button className="inline-link" onClick={() => setPage('Wallet')}>Open wallet <Icon name="chevron" size={15}/></button></div>{transactions.length ? <TransactionList items={transactions.slice(0, 4)}/> : <EmptyState title="No activity yet" description="Your wallet transactions will appear here."/>}</section>
     {news.length > 0 && <section className="section-block"><div className="section-heading"><div><span className="eyebrow">ARVO JOURNAL</span><h2>News & updates</h2></div></div><div className="news-grid">{news.slice(0, 3).map((item) => <article className="news-card" key={item._id}>{item.imageUrl && <img src={item.imageUrl} alt="" loading="lazy"/>}<div><span className="eyebrow">{new Date(item.createdAt).toLocaleDateString()}</span><h3>{item.title}</h3><p>{item.body}</p></div></article>)}</div></section>}
     <div className="demo-note"><span className="demo-mark">i</span><span>Wallet figures reflect approved account records. Plan terms are shown as published by the administrator.</span></div>
@@ -489,16 +519,10 @@ function JewelryCarousel({ items }) {
 }
 
 function PlansPage({ plans, onOpenPlan, wallet }) {
-  const [selectedCategory, setSelectedCategory] = useState('Daily')
-  const categories = ['Daily', 'VIP']
-  const visiblePlans = orderPlanCatalog(plans.filter((plan) => (plan.category || 'Investment plan') === selectedCategory))
   return <>
     <PageHeading eyebrow="ARVO INVESTMENT PLANS" title="Investment plans" subtitle="Compare investment amounts, daily profit, durations and plan limits."/>
     <div className="plan-intro"><div className="intro-seal"><Icon name="spark" size={24}/></div><div><strong>One clear card per plan.</strong><p>Total profit is calculated as daily profit × duration in days.</p></div></div>
-    <div className="plan-category-tabs" role="tablist" aria-label="Plan categories">
-      {categories.map((category) => <button type="button" role="tab" aria-selected={selectedCategory === category} className={selectedCategory === category ? 'selected' : ''} key={category} onClick={() => setSelectedCategory(category)}>{category}<span className="plan-category-count">{plans.filter((plan) => plan.category === category).length}</span></button>)}
-    </div>
-    {visiblePlans.length ? <div className="plan-grid all-plans">{visiblePlans.map((plan, index) => <PlanCard key={plan.id} plan={plan} index={index} wallet={wallet} onOpen={onOpenPlan}/>)}</div> : <EmptyState title="No plans in this category" description="Published plans in this category will appear here."/>}
+    <PlanCatalog plans={plans} wallet={wallet} onOpenPlan={onOpenPlan}/>
     <div className="demo-note"><span className="demo-mark">i</span><span>Plan amounts and return schedules are set by the administrator. Applications remain subject to review.</span></div>
   </>
 }
