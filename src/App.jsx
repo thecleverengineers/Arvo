@@ -61,6 +61,7 @@ function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('arvo-language') || 'en')
   const [news, setNews] = useState([])
   const [banners, setBanners] = useState([])
+  const [homePopup, setHomePopup] = useState(null)
   const [brandLogo, setBrandLogo] = useState('')
   const [brandIcon, setBrandIcon] = useState('')
   const [activePlan, setActivePlan] = useState(null)
@@ -77,7 +78,7 @@ function App() {
 
   async function loadPublicData(languageCode = language) {
     const contentLanguage = encodeURIComponent(languageCode || 'en')
-    const [planData, settingData, newsData, bannerData, logoData, iconData, aboutData] = await Promise.allSettled([api('/plans'), api('/settings'), api(`/content/news?language=${contentLanguage}`), api(`/content/banner?language=${contentLanguage}`), api('/content/logo'), api('/content/icon'), api(`/content/about?language=${contentLanguage}`)])
+    const [planData, settingData, newsData, bannerData, popupData, logoData, iconData, aboutData] = await Promise.allSettled([api('/plans'), api('/settings'), api(`/content/news?language=${contentLanguage}`), api(`/content/banner?language=${contentLanguage}`), api(`/content/announcement_popup?language=${contentLanguage}`), api('/content/logo'), api('/content/icon'), api(`/content/about?language=${contentLanguage}`)])
     if (planData.status === 'fulfilled') setPlans(planData.value.plans || [])
     if (settingData.status === 'fulfilled') {
       setSettings(settingData.value)
@@ -85,6 +86,7 @@ function App() {
     }
     if (newsData.status === 'fulfilled') setNews(newsData.value.items || [])
     if (bannerData.status === 'fulfilled') setBanners((bannerData.value.items || []).filter((item) => item.imageUrl).slice(0, 10))
+    if (popupData.status === 'fulfilled') setHomePopup(popupData.value.items?.[0] || null)
     if (logoData.status === 'fulfilled') setBrandLogo(logoData.value.items?.[0]?.imageUrl || '')
     if (iconData.status === 'fulfilled') setBrandIcon(iconData.value.items?.[0]?.imageUrl || '')
     if (aboutData.status === 'fulfilled') setAbout(aboutData.value.items || [])
@@ -315,6 +317,8 @@ function App() {
       </>}
     </main>
 
+    {page === 'Home' && homePopup && <HomeAnnouncementPopup key={homePopup._id + ':' + (homePopup.updatedAt || '')} item={homePopup}/>}
+
     {user && <nav className="bottom-nav" aria-label="Main navigation">{navItems.map(([label, icon, destination]) => <button key={label} className={`nav-item ${activeNavPage === label ? 'active' : ''}`} onClick={() => navigate(destination)}><Icon name={icon} size={20}/><span>{label}</span></button>)}</nav>}
 
     {action && <WalletActionModal type={action} user={user} methods={settings.paymentMethods || []} onClose={() => setAction(null)} onSubmit={submitWalletAction} notify={notify}/>}
@@ -466,6 +470,52 @@ function PlanCard({ plan, onOpen, compact = false, index = 0, wallet }) {
       <div className="plan-card-footer"><span>{plan.comingSoon ? 'Applications open soon' : !plan.termsReady ? 'Not available yet' : reachedLimit ? 'Purchase limit reached' : 'View plan details'}</span><Icon name="chevron" size={15}/></div>
     </div>
   </button>
+}
+
+function HomeAnnouncementPopup({ item }) {
+  const version = String(item.updatedAt || item._id || '')
+  const storageKey = 'arvo-home-popup:' + item._id
+  const [open, setOpen] = useState(() => {
+    try { return window.localStorage.getItem(storageKey) !== version }
+    catch { return true }
+  })
+  const actionUrl = item.metadata?.url || ''
+  const buttonLabel = item.metadata?.buttonLabel?.trim() || 'Continue'
+
+  function close() {
+    try { window.localStorage.setItem(storageKey, version) } catch {}
+    setOpen(false)
+  }
+
+  useEffect(() => {
+    if (!open) return undefined
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKeyDown = (event) => { if (event.key === 'Escape') close() }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  if (!open) return null
+  return <div className="home-announcement-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close() }}>
+    <section className="home-announcement-card" role="dialog" aria-modal="true" aria-labelledby="home-announcement-title">
+      {item.imageUrl && <div className="home-announcement-visual"><img src={item.imageUrl} alt="" /></div>}
+      <button type="button" className="home-announcement-close" onClick={close} aria-label="Close announcement"><Icon name="close" size={21}/></button>
+      <div className="home-announcement-content">
+        <span className="home-announcement-eyebrow"><Icon name="spark" size={15}/>{item.metadata?.eyebrow || 'ARVO · LATEST NEWS'}</span>
+        <h2 id="home-announcement-title">{item.title}</h2>
+        {item.body && <p>{item.body}</p>}
+      </div>
+      <footer className="home-announcement-footer">
+        {actionUrl
+          ? <a className="home-announcement-cta" href={actionUrl} target={actionUrl.startsWith('https://') ? '_blank' : undefined} rel={actionUrl.startsWith('https://') ? 'noreferrer' : undefined} onClick={close}>{buttonLabel}<Icon name="chevron" size={17}/></a>
+          : <button type="button" className="home-announcement-cta" onClick={close}>{buttonLabel}<Icon name="chevron" size={17}/></button>}
+      </footer>
+    </section>
+  </div>
 }
 
 function HomePage({ wallet, plans, news, banners, onOpenPlan, setPage }) {
@@ -1044,7 +1094,7 @@ function AdminSupportPanel() {
 }
 
 const contentKinds = [
-  ['news', 'News'], ['banner', 'Jewellery carousel'], ['work_area', 'Work area'], ['about', 'About'], ['service', 'Services'], ['investor', 'Investors'], ['partner', 'Partners'], ['social', 'Socials'], ['menu', 'Menu'], ['logo', 'Logo'], ['icon', 'Icon'],
+  ['news', 'News'], ['announcement_popup', 'Home popup'], ['banner', 'Jewellery carousel'], ['work_area', 'Work area'], ['about', 'About'], ['service', 'Services'], ['investor', 'Investors'], ['partner', 'Partners'], ['social', 'Socials'], ['menu', 'Menu'], ['logo', 'Logo'], ['icon', 'Icon'],
 ]
 
 function ContentManager({ onChanged }) {
@@ -1060,7 +1110,7 @@ function ContentManager({ onChanged }) {
     try { const result = await api(`/admin/content?type=${type}`); setItems(result.items || []); setError('') } catch (err) { setError(err.message) }
   }
   useEffect(() => { load(); setForm(null) }, [type])
-  function blank() { return { type, title: '', slug: '', body: '', imageUrl: '', language: 'en', sortOrder: 0, isPublished: false, metadata: { url: '' } } }
+  function blank() { return { type, title: '', slug: '', body: '', imageUrl: '', language: 'en', sortOrder: 0, isPublished: false, metadata: { url: '', eyebrow: type === 'announcement_popup' ? 'Latest news' : '', buttonLabel: type === 'announcement_popup' ? 'Continue' : '' } } }
   async function save(event) {
     event.preventDefault(); setBusy(true); setError('')
     const payload = { ...form, type, slug: form.slug || form.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') }
@@ -1073,7 +1123,7 @@ function ContentManager({ onChanged }) {
     setBusy(true); setError('')
     try { await api(`/admin/content/${item._id}`, { method: 'DELETE' }); await load(); await onChanged() } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
-  return <div className="content-manager"><div className="content-manager-head"><div><span className="eyebrow">WEBSITE & NEWS CONTENT</span><h2>Content management</h2><p>{type === 'banner' ? 'Add up to 10 jewelry images to the Home screen carousel. Set display order to choose the slide sequence.' : 'Manage announcements, website sections, social links, navigation, logo and icon records.'}</p></div><button className="primary-button" disabled={type === 'banner' && bannerImageCount >= 10} onClick={() => setForm(blank())}><Icon name="plus" size={16}/>{type === 'banner' ? bannerImageCount >= 10 ? '10 images reached' : 'Add slide' : 'Add content'}</button></div><div className="content-type-tabs">{contentKinds.map(([key, label]) => <button key={key} className={type === key ? 'selected' : ''} onClick={() => setType(key)}>{label}</button>)}</div>{type === 'banner' && <p className="carousel-limit-note">{Math.min(bannerImageCount, 10)} of 10 carousel images</p>}{error && <p className="form-error admin-error">{error}</p>}{form && <form className="admin-form-card content-edit-form" onSubmit={save}><div className="content-form-heading"><div><span className="eyebrow">{form._id ? 'EDIT ITEM' : 'NEW ITEM'}</span><h3>{contentKinds.find(([key]) => key === type)?.[1]}</h3></div><button type="button" className="text-button" onClick={() => setForm(null)}>Cancel</button></div><label>Title<input className="form-input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required maxLength="160"/></label><label>Slug<input className="form-input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} placeholder="Auto-generated from title"/></label><label>Text / details<textarea className="form-input" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} maxLength="12000" rows="5"/></label><label>Image URL<input className="form-input" type="url" value={form.imageUrl.startsWith('data:') ? '' : form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder={type === 'banner' ? 'https://.../jewellery-image.jpg' : 'https://'} required={type === 'banner' && form.isPublished && !form.imageUrl}/></label>{type === 'banner' && <label>Or upload an image<input className="form-input" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setBusy(true); setError(''); try { const imageUrl = await compressPlanImage(file, 230000); setForm((current) => current ? { ...current, imageUrl } : current) } catch (uploadError) { setError(uploadError.message) } finally { setBusy(false); event.target.value = '' } }}/><small>JPEG, PNG or WebP · compressed for mobile · up to 10 slides</small></label>}{type === 'banner' && form.imageUrl && <img className="carousel-image-preview" src={form.imageUrl} alt="Carousel preview"/>}<label>Link URL<input className="form-input" type="url" value={form.metadata?.url || ''} onChange={(e) => setForm({ ...form, metadata: { ...(form.metadata || {}), url: e.target.value } })} placeholder="https://"/></label><div className="form-pair"><label>Language code<input className="form-input" value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value.toLowerCase() })} maxLength="12"/></label><label>Display order<input className="form-input" type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}/></label></div><label className="checkbox-row"><input type="checkbox" checked={form.isPublished} disabled={!form.isPublished && bannerLimitReached} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })}/> Published {type === 'banner' && bannerLimitReached && !form.isPublished && <span className="optional-label">10-slide limit reached</span>}</label><button className="primary-button" disabled={busy || (type === 'banner' && bannerLimitReached)}>{busy ? 'Saving…' : 'Save content'}</button></form>}{type === 'banner' && bannerLimitReached && !form?._id && <p className="form-error">Delete an image before adding another.</p>}<div className="admin-table-card content-list">{items.length ? items.map((item) => <div className="admin-list-row" key={item._id}><div><strong>{item.title}</strong><span>{item.language} · /{item.slug} · {item.isPublished ? 'Published' : 'Draft'}</span></div><button className="outline-button compact-button" onClick={() => setForm({ ...item, metadata: item.metadata || { url: '' } })}>Edit</button><button className="text-button" disabled={busy} onClick={() => remove(item)}>Delete</button></div>) : <EmptyState title={`No ${contentKinds.find(([key]) => key === type)?.[1].toLowerCase()} items`} description="Add a content item to publish it here."/>}</div></div>
+  return <div className="content-manager"><div className="content-manager-head"><div><span className="eyebrow">WEBSITE & NEWS CONTENT</span><h2>Content management</h2><p>{type === 'banner' ? 'Add up to 10 jewelry images to the Home screen carousel. Set display order to choose the slide sequence.' : type === 'announcement_popup' ? 'Manage the premium Home announcement. Only one popup can be published per language.' : 'Manage announcements, website sections, social links, navigation, logo and icon records.'}</p></div><button className="primary-button" disabled={type === 'banner' && bannerImageCount >= 10} onClick={() => setForm(blank())}><Icon name="plus" size={16}/>{type === 'banner' ? bannerImageCount >= 10 ? '10 images reached' : 'Add slide' : type === 'announcement_popup' ? 'Add popup' : 'Add content'}</button></div><div className="content-type-tabs">{contentKinds.map(([key, label]) => <button key={key} className={type === key ? 'selected' : ''} onClick={() => setType(key)}>{label}</button>)}</div>{type === 'banner' && <p className="carousel-limit-note">{Math.min(bannerImageCount, 10)} of 10 carousel images</p>}{error && <p className="form-error admin-error">{error}</p>}{form && <form className="admin-form-card content-edit-form" onSubmit={save}><div className="content-form-heading"><div><span className="eyebrow">{form._id ? 'EDIT ITEM' : 'NEW ITEM'}</span><h3>{contentKinds.find(([key]) => key === type)?.[1]}</h3></div><button type="button" className="text-button" onClick={() => setForm(null)}>Cancel</button></div><label>Title<input className="form-input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required maxLength="160"/></label><label>Slug<input className="form-input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} placeholder="Auto-generated from title"/></label><label>Text / details<textarea className="form-input" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} maxLength="12000" rows="5"/></label>{type === 'announcement_popup' && <div className="popup-content-fields"><label>Eyebrow<input className="form-input" value={form.metadata?.eyebrow || ''} onChange={(e) => setForm({ ...form, metadata: { ...(form.metadata || {}), eyebrow: e.target.value } })} placeholder="Latest news" maxLength="48"/></label><label>Button label<input className="form-input" value={form.metadata?.buttonLabel || ''} onChange={(e) => setForm({ ...form, metadata: { ...(form.metadata || {}), buttonLabel: e.target.value } })} placeholder="Continue" maxLength="48"/></label></div>}<label>Image URL<input className="form-input" type="url" value={form.imageUrl.startsWith('data:') ? '' : form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder={type === 'banner' ? 'https://.../jewellery-image.jpg' : 'https://'} required={type === 'banner' && form.isPublished && !form.imageUrl}/></label>{(type === 'banner' || type === 'announcement_popup') && <label>Or upload an image<input className="form-input" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setBusy(true); setError(''); try { const imageUrl = await compressPlanImage(file, 230000); setForm((current) => current ? { ...current, imageUrl } : current) } catch (uploadError) { setError(uploadError.message) } finally { setBusy(false); event.target.value = '' } }}/><small>{type === 'announcement_popup' ? 'Optional image shown above the announcement.' : 'JPEG, PNG or WebP · compressed for mobile · up to 10 slides'}</small></label>}{(type === 'banner' || type === 'announcement_popup') && form.imageUrl && <img className="carousel-image-preview" src={form.imageUrl} alt="Carousel preview"/>}<label>{type === 'announcement_popup' ? 'Button link URL' : 'Link URL'}<input className="form-input" type="url" value={form.metadata?.url || ''} onChange={(e) => setForm({ ...form, metadata: { ...(form.metadata || {}), url: e.target.value } })} placeholder="https://"/></label><div className="form-pair"><label>Language code<input className="form-input" value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value.toLowerCase() })} maxLength="12"/></label><label>Display order<input className="form-input" type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}/></label></div><label className="checkbox-row"><input type="checkbox" checked={form.isPublished} disabled={!form.isPublished && bannerLimitReached} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })}/> Published {type === 'banner' && bannerLimitReached && !form.isPublished && <span className="optional-label">10-slide limit reached</span>}</label><button className="primary-button" disabled={busy || (type === 'banner' && bannerLimitReached)}>{busy ? 'Saving…' : 'Save content'}</button></form>}{type === 'banner' && bannerLimitReached && !form?._id && <p className="form-error">Delete an image before adding another.</p>}<div className="admin-table-card content-list">{items.length ? items.map((item) => <div className="admin-list-row" key={item._id}><div><strong>{item.title}</strong><span>{item.language} · /{item.slug} · {item.isPublished ? 'Published' : 'Draft'}</span></div><button className="outline-button compact-button" onClick={() => setForm({ ...item, metadata: item.metadata || { url: '' } })}>Edit</button><button className="text-button" disabled={busy} onClick={() => remove(item)}>Delete</button></div>) : <EmptyState title={`No ${contentKinds.find(([key]) => key === type)?.[1].toLowerCase()} items`} description="Add a content item to publish it here."/>}</div></div>
 }
 
 function AdminPlanTerms({ plan, busy, onSave }) {
