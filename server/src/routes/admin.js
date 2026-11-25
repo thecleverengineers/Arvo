@@ -424,7 +424,7 @@ router.get('/audit', asyncRoute(async (_req, res) => {
   res.json({ entries })
 }))
 
-const contentTypes = ['news', 'banner', 'work_area', 'about', 'service', 'investor', 'partner', 'social', 'menu', 'logo', 'icon']
+const contentTypes = ['news', 'banner', 'announcement_popup', 'work_area', 'about', 'service', 'investor', 'partner', 'social', 'menu', 'logo', 'icon']
 const contentInput = z.object({
   type: z.enum(contentTypes),
   title: z.string().trim().min(2).max(160),
@@ -455,6 +455,13 @@ async function bannerLimitReached(data, excludeId) {
   return (await ContentItem.countDocuments(filter)) >= 10
 }
 
+async function publishSingleAnnouncement(data, excludeId) {
+  if (data.type !== 'announcement_popup' || !data.isPublished) return
+  const filter = { type: 'announcement_popup', language: data.language, isPublished: true }
+  if (excludeId) filter._id = { $ne: excludeId }
+  await ContentItem.updateMany(filter, { $set: { isPublished: false } })
+}
+
 router.get('/content', asyncRoute(async (req, res) => {
   const type = contentTypes.includes(req.query.type) ? req.query.type : undefined
   const filter = type ? { type } : {}
@@ -466,6 +473,7 @@ router.post('/content', asyncRoute(async (req, res) => {
   const parsed = parseContent(req.body)
   if (parsed.error) return res.status(400).json({ error: parsed.error })
   if (await bannerLimitReached(parsed.data)) return res.status(409).json({ error: 'A maximum of 10 carousel images is allowed. Delete an image before adding another.' })
+  await publishSingleAnnouncement(parsed.data)
   const item = await ContentItem.create({ ...parsed.data, createdBy: req.user._id })
   await AuditLog.create({ actorId: req.user._id, action: 'content.created', targetType: parsed.data.type, targetId: item._id, details: { slug: item.slug } })
   res.status(201).json({ item })
@@ -477,6 +485,7 @@ router.patch('/content/:id', asyncRoute(async (req, res) => {
   const existing = await ContentItem.findById(req.params.id).select('_id')
   if (!existing) return res.status(404).json({ error: 'Content item not found.' })
   if (await bannerLimitReached(parsed.data, existing._id)) return res.status(409).json({ error: 'A maximum of 10 carousel images is allowed. Delete an image before adding another.' })
+  await publishSingleAnnouncement(parsed.data, existing._id)
   const item = await ContentItem.findByIdAndUpdate(req.params.id, parsed.data, { new: true, runValidators: true })
   if (!item) return res.status(404).json({ error: 'Content item not found.' })
   await AuditLog.create({ actorId: req.user._id, action: 'content.updated', targetType: item.type, targetId: item._id, details: { slug: item.slug } })
