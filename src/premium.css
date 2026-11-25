@@ -485,10 +485,9 @@ body { background: #e8e9e8; }
 }
 
 
-/* Reference-style investment plan cards and mobile category switcher */
-.plan-category-tabs { display:flex; gap:8px; overflow-x:auto; padding:4px 1px 9px; margin:0 0 18px; scrollbar-width:none; }
-.plan-category-tabs::-webkit-scrollbar { display:none; }
-.plan-category-tabs button { flex:0 0 auto; min-height:38px; padding:0 16px; border:1px solid var(--border); border-radius:999px; background:var(--card); color:var(--muted); font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+/* Reference-style plan cards with evenly divided Daily and VIP tabs */
+.plan-category-tabs { width:100%; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; overflow:visible; padding:5px; margin:0 0 18px; border:1px solid var(--border); border-radius:16px; background:var(--card-soft); }
+.plan-category-tabs button { width:100%; min-width:0; min-height:44px; display:flex; align-items:center; justify-content:center; gap:8px; padding:0 12px; border:1px solid transparent; border-radius:12px; background:transparent; color:var(--muted); font:inherit; font-size:12px; font-weight:700; text-align:center; cursor:pointer; }
 .plan-category-tabs button.selected { border-color:var(--deep); background:var(--deep); color:var(--highlight); }
 .plan-card { width:100%; text-align:left; }
 .plan-card-body { display:flex; flex-direction:column; gap:10px; }
