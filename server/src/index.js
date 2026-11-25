@@ -47,7 +47,7 @@ async function start() {
   await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 })
   await PlatformSettings.updateOne({ key: 'main' }, { $setOnInsert: { languages: ['en'], themeIds: ['emerald', 'obsidian', 'ivory', 'sapphire', 'burgundy'], activeTheme: 'emerald', paymentMethods: [] } }, { upsert: true })
   const welcomePopup = await ContentItem.exists({ type: 'announcement_popup', language: 'en' })
-  if (!welcomePopup) await ContentItem.create({ type: 'announcement_popup', title: 'Welcome to Arvo', slug: 'arvo-welcome', body: 'Explore your Arvo account, discover available plans and check back here for the latest updates.', imageUrl: '', language: 'en', sortOrder: 0, isPublished: true, metadata: { eyebrow: 'ARVO · LATEST NEWS', buttonLabel: 'Continue', url: '' } })
+  if (!welcomePopup) await ContentItem.create({ type: 'announcement_popup', title: 'Welcome to Arvo', slug: 'arvo-welcome', body: 'Explore your Arvo account, discover available plans and check back here for the latest updates.', imageUrl: '', language: 'en', sortOrder: 0, isPublished: true, metadata: { eyebrow: 'ARVO · LATEST NEWS', buttonLabel: 'Join Telegram Channel', url: '' } })
   app.listen(port, () => console.log(`Arvo API listening on port ${port}`))
 }
 
