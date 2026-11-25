@@ -398,6 +398,10 @@ router.patch('/theme', asyncRoute(async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: 'Select a valid Arvo theme.' })
 
   const previous = await PlatformSettings.findOne({ key: 'main' }).lean()
+  const paidThemes = new Set(['obsidian', 'sapphire', 'burgundy'])
+  if (paidThemes.has(parsed.data.activeTheme) && (previous?.activeTheme || 'emerald') !== parsed.data.activeTheme) {
+    return res.status(402).json({ error: 'This theme requires USDT 30 developer activation. Contact @cleverengineers on Telegram.' })
+  }
   const settings = await PlatformSettings.findOneAndUpdate(
     { key: 'main' },
     { $set: { activeTheme: parsed.data.activeTheme, updatedBy: req.user._id },
