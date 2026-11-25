@@ -85,8 +85,9 @@ router.get('/content/:type', asyncRoute(async (req, res) => {
   const allowed = ['news', 'banner', 'work_area', 'about', 'service', 'investor', 'partner', 'social', 'menu', 'logo', 'icon']
   if (!allowed.includes(req.params.type)) return res.status(404).json({ error: 'Content type not found.' })
   const language = String(req.query.language || 'en').trim().toLowerCase().slice(0, 12)
-  let items = await ContentItem.find({ type: req.params.type, isPublished: true, language }).sort({ sortOrder: 1, createdAt: -1 }).lean()
-  if (!items.length && language !== 'en') items = await ContentItem.find({ type: req.params.type, isPublished: true, language: 'en' }).sort({ sortOrder: 1, createdAt: -1 }).lean()
+  const limit = req.params.type === 'banner' ? 10 : 500
+  let items = await ContentItem.find({ type: req.params.type, isPublished: true, language }).sort({ sortOrder: 1, createdAt: -1 }).limit(limit).lean()
+  if (!items.length && language !== 'en') items = await ContentItem.find({ type: req.params.type, isPublished: true, language: 'en' }).sort({ sortOrder: 1, createdAt: -1 }).limit(limit).lean()
   res.json({ items })
 }))
 
