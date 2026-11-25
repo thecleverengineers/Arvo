@@ -551,10 +551,7 @@ function PlanDetail({ plan, onBack, onApply, signedOut, onSignIn, wallet }) {
             <div><span>Duration</span><strong>{plan.termsReady ? durationLabel(plan.durationDays) : '—'}</strong></div>
             <div><span>Total profit</span><strong>{plan.termsReady ? formatUSDT(plan.profitReturnPaise || 0, true) : '—'}</strong></div>
             <div><span>Investment cycle</span><strong>{plan.termsReady ? cycleLabel(plan.cycle) : '—'}</strong></div>
-            <div><span>Investment ROI</span><strong>{plan.termsReady ? `${Number(plan.investmentRoiPct || 0)}%` : '—'}</strong></div>
             <div><span>Purchase limit</span><strong>{used}/{limit}</strong></div>
-            <div><span>Risk information</span><strong>{plan.riskLabel || 'See plan documents'}</strong></div>
-            <div><span>Terms document</span><strong>{plan.termsUrl ? <a href={plan.termsUrl} target="_blank" rel="noreferrer">Open terms</a> : 'Not supplied'}</strong></div>
           </div>
         </div>
       </div>
