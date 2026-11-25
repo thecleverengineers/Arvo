@@ -644,10 +644,117 @@ function ReferralPage({ referrals, rewards, notify }) {
 }
 
 function TeamPage({ team, onShare, onOpenIncome }) {
-  const levels=team?.levels||[1,2,3].map((level)=>({level,count:0,investors:0,investedPaise:0,rechargePaise:0,rewardPaidPaise:0}))
-  return <><PageHeading eyebrow="YOUR NETWORK" title="Team overview" subtitle="See active members, approved recharges and plan activity across three referral levels."/><section className="team-summary-grid"><div><span className="eyebrow">TEAM MEMBERS</span><strong>{team?.totalMembers||0}</strong></div><div><span className="eyebrow">TEAM INVESTED</span><strong>{formatUSDT(team?.totalInvestedPaise||0,true)}</strong></div><div><span className="eyebrow">APPROVED RECHARGES</span><strong>{formatUSDT(team?.totalRechargePaise||0,true)}</strong></div><div><span className="eyebrow">REWARDS PAID</span><strong>{formatUSDT(team?.totalRewardPaidPaise||0,true)}</strong></div></section><section className="section-block"><div className="section-heading"><div><span className="eyebrow">LEVEL DETAILS</span><h2>Team activity</h2></div></div><div className="team-level-list">{levels.map((item)=> <article className="team-level-card" key={item.level}><div className="team-level-heading"><span className="level-icon level-green"><Icon name="users" size={19}/></span><div><span className="eyebrow">LEVEL {item.level}</span><strong>{item.count} members</strong></div></div><div className="team-level-stats"><div><span>Investors</span><strong>{item.investors||0}</strong></div><div><span>Plan value</span><strong>{formatUSDT(item.investedPaise||0,true)}</strong></div><div><span>Recharges</span><strong>{formatUSDT(item.rechargePaise||0,true)}</strong></div><div><span>Rewards paid</span><strong>{formatUSDT(item.rewardPaidPaise||0,true)}</strong></div></div></article>)}</div></section><div className="team-actions"><button className="primary-button" onClick={onShare}><Icon name="share" size={17}/> Share invite link</button><button className="outline-button" onClick={onOpenIncome}>View income history</button></div><div className="demo-note"><span className="demo-mark">i</span><span>Team totals use approved account records and do not expose other users’ personal details.</span></div></>
-}
+  const levels = team?.levels || [1, 2, 3].map((level) => ({ level, count: 0, investors: 0, investedPaise: 0, rechargePaise: 0, rewardPaidPaise: 0 }))
+  const [selectedLevel, setSelectedLevel] = useState(null)
+  const [memberPage, setMemberPage] = useState(1)
+  const [memberData, setMemberData] = useState({ members: [], totalMembers: 0, pageSize: 20 })
+  const [membersLoading, setMembersLoading] = useState(false)
+  const [membersError, setMembersError] = useState('')
 
+  useEffect(() => {
+    if (!selectedLevel) return undefined
+    let active = true
+    setMembersLoading(true)
+    setMembersError('')
+    api(`/team/levels/${selectedLevel}/members?page=${memberPage}`)
+      .then((result) => { if (active) setMemberData(result) })
+      .catch((error) => { if (active) setMembersError(error.message || 'Could not load this team level.') })
+      .finally(() => { if (active) setMembersLoading(false) })
+    return () => { active = false }
+  }, [selectedLevel, memberPage])
+
+  function openLevel(level) {
+    setMemberPage(1)
+    setSelectedLevel(level)
+  }
+
+  if (selectedLevel) {
+    const members = memberData.members || []
+    const pageCount = Math.max(1, Math.ceil((memberData.totalMembers || 0) / (memberData.pageSize || 20)))
+    const firstMember = memberData.totalMembers ? (memberPage - 1) * memberData.pageSize + 1 : 0
+    const lastMember = Math.min(memberPage * memberData.pageSize, memberData.totalMembers || 0)
+    const activityLabels = {
+      deposit: 'Wallet recharge',
+      investment: 'Plan purchase',
+      referral_reward: 'Referral reward',
+      plan_return: 'Plan profit return',
+      investment_return: 'Investment principal returned',
+      welcome_bonus: 'Welcome bonus',
+      team_bonus: 'Team milestone reward',
+      daily_bonus: 'Daily invite reward',
+      withdrawal_hold: 'Withdrawal request',
+      withdrawal_refund: 'Withdrawal refund',
+      transfer_in: 'Wallet transfer received',
+      transfer_out: 'Wallet transfer sent',
+    }
+    return <>
+      <PageHeading eyebrow={`LEVEL ${selectedLevel} MEMBERS`} title="Team members" subtitle="Member contact details and recent account activity for this referral level." action={<button type="button" className="outline-button" onClick={() => setSelectedLevel(null)}><Icon name="chevron" size={16}/> Back to levels</button>}/>
+      <section className="team-members-summary">
+        <div><span className="eyebrow">LEVEL ${selectedLevel}</span><strong>{memberData.totalMembers || 0} members</strong></div>
+        <span>{memberData.totalMembers ? `Showing ${firstMember}–${lastMember}` : 'No members in this level yet'}</span>
+      </section>
+      {membersError && <div className="form-error team-members-error" role="alert">{membersError}</div>}
+      {membersLoading ? <div className="loading-state team-members-loading" role="status"><div className="loading-spinner"><span/></div><span>Loading level members…</span></div> : members.length ? <div className="team-member-list">
+        {members.map((member) => <article className="team-member-card" key={member.id}>
+          <div className="team-member-heading">
+            <span className="team-member-avatar">{(member.name || 'A').trim().slice(0, 1).toUpperCase()}</span>
+            <div className="team-member-identity">
+              <strong>{member.name || 'Arvo member'}</strong>
+              <a href={`tel:+91${member.phone}`}>+91 {member.phone}</a>
+            </div>
+            <span className="team-member-joined">Joined {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</span>
+          </div>
+          <div className="team-member-metrics">
+            <div><span>Plan purchases</span><strong>{member.planPurchaseCount || 0}</strong></div>
+            <div><span>Plan value</span><strong>{formatUSDT(member.investedPaise || 0, true)}</strong></div>
+            <div><span>Approved recharges</span><strong>{member.rechargeCount || 0} · {formatUSDT(member.rechargePaise || 0, true)}</strong></div>
+            <div><span>Rewards paid</span><strong>{formatUSDT(member.rewardsPaidPaise || 0, true)}</strong></div>
+            <div><span>Active plans</span><strong>{member.activePlanCount || 0} · {formatUSDT(member.activePlanValuePaise || 0, true)}</strong></div>
+            <div><span>Investor status</span><strong>{member.investor ? 'Invested' : 'Not yet invested'}</strong></div>
+          </div>
+          <div className="team-member-activity">
+            <div className="team-member-activity-heading"><strong>Recent activity</strong><span>Latest {member.activities?.length || 0} wallet entries</span></div>
+            {member.activities?.length ? <div className="team-activity-list">{member.activities.map((activity, index) => <div className="team-activity-row" key={activity.id || `${activity.kind}-${activity.createdAt}-${index}`}>
+              <span className="team-activity-dot"/>
+              <div><strong>{activityLabels[activity.kind] || activity.kind?.replaceAll('_', ' ') || 'Account activity'}</strong><span>{activity.description || 'Wallet activity'} · {activity.createdAt ? new Date(activity.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : ''}</span></div>
+              <b className={activity.direction === 'credit' ? 'team-activity-credit' : ''}>{activity.direction === 'credit' ? '+' : '−'}{formatUSDT(activity.amountPaise || 0, true)}</b>
+            </div>)}</div> : <p className="team-no-activity">No wallet activity recorded yet.</p>}
+          </div>
+        </article>)}
+      </div> : !membersError && <EmptyState title="No members at this level" description="Members who join through this referral level will appear here."/>}
+      {!membersLoading && memberData.totalMembers > (memberData.pageSize || 20) && <div className="team-member-pagination">
+        <button type="button" className="outline-button compact-button" onClick={() => setMemberPage((page) => Math.max(1, page - 1))} disabled={memberPage <= 1}>Previous</button>
+        <span>Page {memberPage} of {pageCount}</span>
+        <button type="button" className="outline-button compact-button" onClick={() => setMemberPage((page) => Math.min(pageCount, page + 1))} disabled={memberPage >= pageCount}>Next</button>
+      </div>}
+    </>
+  }
+
+  return <>
+    <PageHeading eyebrow="YOUR NETWORK" title="Team overview" subtitle="See active members, approved recharges and plan activity across three referral levels."/>
+    <section className="team-summary-grid">
+      <div><span className="eyebrow">TEAM MEMBERS</span><strong>{team?.totalMembers || 0}</strong></div>
+      <div><span className="eyebrow">TEAM INVESTED</span><strong>{formatUSDT(team?.totalInvestedPaise || 0, true)}</strong></div>
+      <div><span className="eyebrow">APPROVED RECHARGES</span><strong>{formatUSDT(team?.totalRechargePaise || 0, true)}</strong></div>
+      <div><span className="eyebrow">REWARDS PAID</span><strong>{formatUSDT(team?.totalRewardPaidPaise || 0, true)}</strong></div>
+    </section>
+    <section className="section-block">
+      <div className="section-heading"><div><span className="eyebrow">LEVEL DETAILS</span><h2>Team activity</h2></div></div>
+      <div className="team-level-list">{levels.map((item) => <article className="team-level-card" key={item.level}>
+        <div className="team-level-heading"><span className="level-icon level-green"><Icon name="users" size={19}/></span><div><span className="eyebrow">LEVEL {item.level}</span><strong>{item.count} members</strong></div></div>
+        <div className="team-level-stats">
+          <div><span>Investors</span><strong>{item.investors || 0}</strong></div>
+          <div><span>Plan value</span><strong>{formatUSDT(item.investedPaise || 0, true)}</strong></div>
+          <div><span>Recharges</span><strong>{formatUSDT(item.rechargePaise || 0, true)}</strong></div>
+          <div><span>Rewards paid</span><strong>{formatUSDT(item.rewardPaidPaise || 0, true)}</strong></div>
+        </div>
+        <button type="button" className="team-level-view-button" onClick={() => openLevel(item.level)}><span>View team</span><span>{item.count || 0} members</span><Icon name="chevron" size={17}/></button>
+      </article>)}</div>
+    </section>
+    <div className="team-actions"><button className="primary-button" onClick={onShare}><Icon name="share" size={17}/> Share invite link</button><button className="outline-button" onClick={onOpenIncome}>View income history</button></div>
+    <div className="demo-note"><span className="demo-mark">i</span><span>Team totals use approved account records. Open a level to view member details and recent wallet activity.</span></div>
+  </>
+}
 function IncomePage({ income, onWallet }) {
   const entries=income?.entries||[], claims=income?.claims||[]
   const labels={plan_return:'Plan profit return',investment_return:'Investment principal returned',referral_reward:'Referral reward',welcome_bonus:'Welcome bonus',team_bonus:'Team milestone bonus',daily_bonus:'Daily invite bonus'}
