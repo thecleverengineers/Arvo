@@ -59,6 +59,7 @@ function App() {
   const [installPrompt, setInstallPrompt] = useState(null)
   const [language, setLanguage] = useState(() => localStorage.getItem('arvo-language') || 'en')
   const [news, setNews] = useState([])
+  const [banners, setBanners] = useState([])
   const [brandLogo, setBrandLogo] = useState('')
   const [brandIcon, setBrandIcon] = useState('')
   const [activePlan, setActivePlan] = useState(null)
@@ -73,14 +74,16 @@ function App() {
     window.arvoToastTimer = window.setTimeout(() => setToast(''), 3000)
   }
 
-  async function loadPublicData() {
-    const [planData, settingData, newsData, logoData, iconData, aboutData] = await Promise.allSettled([api('/plans'), api('/settings'), api('/content/news'), api('/content/logo'), api('/content/icon'), api(`/content/about?language=${encodeURIComponent(language)}`)])
+  async function loadPublicData(languageCode = language) {
+    const contentLanguage = encodeURIComponent(languageCode || 'en')
+    const [planData, settingData, newsData, bannerData, logoData, iconData, aboutData] = await Promise.allSettled([api('/plans'), api('/settings'), api(`/content/news?language=${contentLanguage}`), api(`/content/banner?language=${contentLanguage}`), api('/content/logo'), api('/content/icon'), api(`/content/about?language=${contentLanguage}`)])
     if (planData.status === 'fulfilled') setPlans(planData.value.plans || [])
     if (settingData.status === 'fulfilled') {
       setSettings(settingData.value)
       setTheme(settingData.value.activeTheme || 'emerald')
     }
     if (newsData.status === 'fulfilled') setNews(newsData.value.items || [])
+    if (bannerData.status === 'fulfilled') setBanners((bannerData.value.items || []).filter((item) => item.imageUrl).slice(0, 10))
     if (logoData.status === 'fulfilled') setBrandLogo(logoData.value.items?.[0]?.imageUrl || '')
     if (iconData.status === 'fulfilled') setBrandIcon(iconData.value.items?.[0]?.imageUrl || '')
     if (aboutData.status === 'fulfilled') setAbout(aboutData.value.items || [])
@@ -210,6 +213,7 @@ function App() {
     const available = (settings.languages || ['en']).includes(nextLanguage) ? nextLanguage : 'en'
     setLanguage(available)
     localStorage.setItem('arvo-language', available)
+    loadPublicData(available)
   }
 
   async function submitPlan(plan, amount, requestKey) {
@@ -293,7 +297,7 @@ function App() {
           {activePlan && <PlanDetail plan={activePlan} wallet={wallet} onBack={() => setActivePlan(null)} signedOut onSignIn={() => navigate('Login')}/>}
         </>}
       </> : <>
-        {page === 'Home' && !activePlan && <HomePage user={user} wallet={wallet} referrals={referrals} plans={plans} news={news} onOpenPlan={openPlan} setPage={navigate} notify={notify}/>}
+        {page === 'Home' && !activePlan && <HomePage user={user} wallet={wallet} referrals={referrals} plans={plans} news={news} banners={banners} onOpenPlan={openPlan} setPage={navigate} notify={notify}/>}
         {page === 'Plans' && !activePlan && <PlansPage plans={plans} wallet={wallet} onOpenPlan={openPlan}/>} 
         {page === 'Plans' && activePlan && <PlanDetail plan={activePlan} wallet={wallet} onBack={() => setActivePlan(null)} onApply={submitPlan}/>}
         {page === 'Wallet' && <WalletPage wallet={wallet} onAction={setAction} onIncome={() => navigate('Income')} notify={notify}/>}
@@ -333,10 +337,11 @@ function EmptyState({ title, description, action }) { return <div className="emp
 function StatusPill({ status }) { const label = status?.replaceAll('_', ' ') || 'pending'; return <span className={`status-pill state-${label.replaceAll(' ', '-')}`}>{label}</span> }
 
 function SignedOutPage({ plans, onSignIn, onSignUp, onBrowse, onOpenPlan }) {
-  return <div className="signed-out-page"><section className="signed-out-copy"><span className="eyebrow">WEALTH, THOUGHTFULLY</span><h1>A clearer view of your financial journey<span className="greeting-dot">.</span></h1><p>Explore available plans, manage requests and keep your account details in one considered place.</p><div className="signed-out-actions"><button className="primary-button" onClick={onSignUp}>Create your Arvo account <Icon name="chevron" size={17}/></button><button className="text-button" onClick={onBrowse}>Explore plans</button><button className="text-button" onClick={onSignIn}>Already a member? Sign in</button></div><div className="trust-note"><Icon name="lock" size={16}/> Secure access with mobile verification</div></section><aside className="signed-out-panel"><div className="signed-panel-top"><span className="brand-mark">A</span><span className="eyebrow">ARVO ACCOUNT</span></div><div className="signed-panel-orbit"><span/><span/><strong>A</strong></div><div className="signed-panel-foot"><span>Personal dashboard</span><span>Plans · Wallet · Referrals</span></div></aside><section className="public-plans-preview"><div className="section-heading"><div><span className="eyebrow">EXPLORE ARVO</span><h2>Available investment plans</h2></div><button className="inline-link" onClick={onBrowse}>View plans <Icon name="chevron" size={15}/></button></div>{plans.length ? <div className="plan-grid home-plans">{plans.slice(0, 2).map((plan, index) => <PlanCard plan={plan} index={index} key={plan.id} onOpen={onOpenPlan}/>)}</div> : <p className="muted-line">Plans will appear here when published by the administrator.</p>}</section></div>
+  const orderedPlans = orderPlanCatalog(plans)
+  return <div className="signed-out-page"><section className="signed-out-copy"><span className="eyebrow">WEALTH, THOUGHTFULLY</span><h1>A clearer view of your financial journey<span className="greeting-dot">.</span></h1><p>Explore available plans, manage requests and keep your account details in one considered place.</p><div className="signed-out-actions"><button className="primary-button" onClick={onSignUp}>Create your Arvo account <Icon name="chevron" size={17}/></button><button className="text-button" onClick={onBrowse}>Explore plans</button><button className="text-button" onClick={onSignIn}>Already a member? Sign in</button></div><div className="trust-note"><Icon name="lock" size={16}/> Secure access with mobile verification</div></section><aside className="signed-out-panel"><div className="signed-panel-top"><span className="brand-mark">A</span><span className="eyebrow">ARVO ACCOUNT</span></div><div className="signed-panel-orbit"><span/><span/><strong>A</strong></div><div className="signed-panel-foot"><span>Personal dashboard</span><span>Plans · Wallet · Referrals</span></div></aside><section className="public-plans-preview"><div className="section-heading"><div><span className="eyebrow">EXPLORE ARVO</span><h2>Available investment plans</h2></div><button className="inline-link" onClick={onBrowse}>View plans <Icon name="chevron" size={15}/></button></div>{orderedPlans.length ? <div className="plan-grid home-plans">{orderedPlans.map((plan, index) => <PlanCard plan={plan} index={index} key={plan.id} onOpen={onOpenPlan}/>)}</div> : <p className="muted-line">Plans will appear here when published by the administrator.</p>}</section></div>
 }
 
-async function compressPlanImage(file) {
+async function compressPlanImage(file, maxLength = 600000) {
   const supportedTypes = ['image/jpeg', 'image/png', 'image/webp']
   if (!supportedTypes.includes(file.type)) throw new Error('Choose a JPEG, PNG or WebP image.')
   if (file.size > 12 * 1024 * 1024) throw new Error('Choose an image smaller than 12 MB.')
@@ -359,9 +364,9 @@ async function compressPlanImage(file) {
     context.drawImage(image, 0, 0, canvas.width, canvas.height)
     for (let quality = 0.86; quality >= 0.5; quality -= 0.06) {
       const dataUrl = canvas.toDataURL('image/jpeg', quality)
-      if (dataUrl.length <= 600000) return dataUrl
+      if (dataUrl.length <= maxLength) return dataUrl
     }
-    throw new Error('This image is still too large after compression. Try a smaller image.')
+    throw new Error(`This image is still too large after compression. Try a smaller image under ${Math.round(maxLength / 1000)} KB.`)
   } finally {
     URL.revokeObjectURL(objectUrl)
   }
@@ -380,6 +385,13 @@ function planArtworkVariant(plan, fallback = 0) {
   const ordinal = Number(plan?.slug?.match(/-(\d{2})$/)?.[1])
   const index = Number.isFinite(ordinal) && ordinal > 0 ? ordinal - 1 : fallback % 9
   return (plan?.category === 'VIP' ? 9 : 0) + index
+}
+
+function orderPlanCatalog(plans) {
+  return [...plans].sort((a, b) => {
+    const rank = (plan) => plan.comingSoon ? 2 : plan.termsReady ? 0 : 1
+    return rank(a) - rank(b) || planArtworkVariant(a) - planArtworkVariant(b)
+  })
 }
 
 function PowerBankArt({ variant = 0 }) {
@@ -410,7 +422,7 @@ function PlanCard({ plan, onOpen, compact = false, index = 0, wallet }) {
   const limit = Math.max(1, Number(plan.purchaseLimit) || 2)
   const used = Math.max(0, Number(wallet?.planUsage?.[plan.id] || 0))
   const reachedLimit = used >= limit
-  const availability = plan.comingSoon ? 'Coming soon' : !plan.termsReady ? 'Terms pending' : reachedLimit ? 'Limit reached' : 'Buy now'
+  const availability = plan.comingSoon ? 'Coming soon' : !plan.termsReady ? 'Unavailable' : reachedLimit ? 'Limit reached' : 'Buy now'
   return <button type="button" className={`plan-card ${compact ? 'plan-card-compact' : ''}`} onClick={() => onOpen(plan)}>
     <div className={`plan-art ${tint} ${plan.imageUrl ? 'has-image' : ''}`}>{plan.imageUrl ? <img className="plan-art-image" src={plan.imageUrl} alt="" loading="lazy"/> : isPowerBankPlan(plan) ? <PowerBankArt variant={artworkVariant}/> : <span className="plan-symbol"><Icon name={['sun','spark','shield'][artworkVariant % 3]} size={26}/></span>}<span className="plan-art-label">ARVO · {plan.category || 'PLAN'} · {String(artworkVariant + 1).padStart(2, '0')}</span><span className="plan-orbit orbit-one"/><span className="plan-orbit orbit-two"/></div>
     <div className="plan-card-body">
@@ -419,21 +431,22 @@ function PlanCard({ plan, onOpen, compact = false, index = 0, wallet }) {
       <p>{plan.summary || 'Review the fixed investment amount, daily profit and duration.'}</p>
       <div className="plan-card-metrics">
         <div className="plan-metric plan-metric-price"><span>Investment amount</span><strong>{formatUSDT(plan.pricePaise, true)}</strong></div>
-        <div className="plan-metric"><span>Daily profit</span><strong>{plan.termsReady ? formatUSDT(plan.dailyProfitPaise || 0, true) : 'Not set'}</strong></div>
-        <div className="plan-metric"><span>Duration</span><strong>{plan.termsReady ? durationLabel(plan.durationDays) : 'Not set'}</strong></div>
-        <div className="plan-metric"><span>Total profit</span><strong>{plan.termsReady ? formatUSDT(plan.profitReturnPaise || 0, true) : 'Not set'}</strong></div>
+        <div className="plan-metric"><span>Daily profit</span><strong>{plan.termsReady ? formatUSDT(plan.dailyProfitPaise || 0, true) : '—'}</strong></div>
+        <div className="plan-metric"><span>Duration</span><strong>{plan.termsReady ? durationLabel(plan.durationDays) : '—'}</strong></div>
+        <div className="plan-metric"><span>Total profit</span><strong>{plan.termsReady ? formatUSDT(plan.profitReturnPaise || 0, true) : '—'}</strong></div>
       </div>
-      <div className="plan-card-footer"><span>{plan.comingSoon ? 'Applications open soon' : !plan.termsReady ? 'Plan terms are being finalized' : reachedLimit ? 'Purchase limit reached' : 'View plan details'}</span><Icon name="chevron" size={15}/></div>
+      <div className="plan-card-footer"><span>{plan.comingSoon ? 'Applications open soon' : !plan.termsReady ? 'Not available yet' : reachedLimit ? 'Purchase limit reached' : 'View plan details'}</span><Icon name="chevron" size={15}/></div>
     </div>
   </button>
 }
 
-function HomePage({ user, wallet, referrals, plans, news, onOpenPlan, setPage }) {
+function HomePage({ user, wallet, referrals, plans, news, banners, onOpenPlan, setPage }) {
   const available = wallet?.wallet?.availablePaise || 0
   const invested = wallet?.wallet?.investedPaise || 0
   const reserved = wallet?.wallet?.reservedPaise || 0
   const total = available + invested + reserved
   const transactions = wallet?.transactions || []
+  const orderedPlans = orderPlanCatalog(plans)
   return <>
     <section className="welcome-row"><div><span className="eyebrow">YOUR ARVO OVERVIEW</span><h1>Welcome, {user.name?.split(' ')[0] || 'there'}<span className="greeting-dot">.</span></h1><p>Your account activity, clearly brought together.</p></div><button className="help-link" onClick={() => setPage('Support')}><Icon name="help" size={17}/> Live chat support</button></section>
     <section className="hero-grid"><div className="balance-card"><div className="balance-card-top"><span className="balance-label"><span className="live-dot"/> ACCOUNT VALUE</span><Icon name="spark" size={17}/></div><div className="balance-value">{formatUSDT(total / 100)}</div><div className="balance-change"><span>Available balance + active plan value + reserved requests</span></div><div className="balance-footer"><div><span>Invested</span><strong>{formatUSDT(invested, true)}</strong></div><div><span>Available</span><strong>{formatUSDT(available, true)}</strong></div><button className="balance-arrow" onClick={() => setPage('Wallet')} aria-label="View wallet"><Icon name="chevron" size={20}/></button></div><div className="hero-line" aria-hidden="true"><svg viewBox="0 0 560 110" preserveAspectRatio="none"><path d="M0 93 C38 83 42 58 76 66 S119 87 153 65 198 41 229 58 275 75 305 48 352 39 382 47 426 26 460 38 503 14 560 9" fill="none" stroke="currentColor" strokeWidth="2"/></svg></div></div><div className="side-cards"><div className="small-stat-card"><div className="stat-card-top"><span className="stat-icon"><Icon name="wallet" size={18}/></span><span className="eyebrow">RESERVED</span></div><strong>{formatUSDT(reserved, true)}</strong><span className="stat-caption">Withdrawal requests under review</span></div><div className="small-stat-card second-stat"><div className="stat-card-top"><span className="stat-icon lavender"><Icon name="layers" size={18}/></span><span className="eyebrow">ACTIVE PLANS</span></div><strong>{wallet?.positions?.length || 0}</strong><button className="inline-link" onClick={() => setPage('Plans')}>View plans <Icon name="chevron" size={14}/></button></div></div></section>
@@ -443,17 +456,42 @@ function HomePage({ user, wallet, referrals, plans, news, onOpenPlan, setPage })
       <button className="quick-action" onClick={() => setPage('Referrals')}><span className="quick-action-icon"><Icon name="users" size={19}/></span><span>Referrals</span></button>
       <button className="quick-action" onClick={() => setPage('Support')}><span className="quick-action-icon"><Icon name="help" size={19}/></span><span>Support</span></button>
     </section>
-    <section className="section-block"><div className="section-heading"><div><span className="eyebrow">AVAILABLE TO REVIEW</span><h2>Investment plans</h2></div><button className="inline-link" onClick={() => setPage('Plans')}>View all <Icon name="chevron" size={15}/></button></div>{plans.length ? <div className="plan-grid home-plans">{plans.slice(0, 2).map((plan, index) => <PlanCard key={plan.id} plan={plan} index={index} wallet={wallet} compact onOpen={onOpenPlan}/>)}</div> : <EmptyState title="No plans are published yet" description="Published plans will appear here with their own profile and terms."/>}</section>
+    {banners.length > 0 && <JewelryCarousel items={banners}/>}
+    <section className="section-block"><div className="section-heading"><div><span className="eyebrow">INVESTMENT PLANS</span><h2>Available plans</h2></div><button className="inline-link" onClick={() => setPage('Plans')}>View all <Icon name="chevron" size={15}/></button></div>{orderedPlans.length ? <div className="plan-grid home-plans">{orderedPlans.map((plan, index) => <PlanCard key={plan.id} plan={plan} index={index} wallet={wallet} compact onOpen={onOpenPlan}/>)}</div> : <EmptyState title="No plans are published yet" description="Published plans will appear here with their own profile and terms."/>}</section>
     <section className="section-block activity-block"><div className="section-heading"><div><span className="eyebrow">ACCOUNT LEDGER</span><h2>Recent activity</h2></div><button className="inline-link" onClick={() => setPage('Wallet')}>Open wallet <Icon name="chevron" size={15}/></button></div>{transactions.length ? <TransactionList items={transactions.slice(0, 4)}/> : <EmptyState title="No activity yet" description="Your wallet transactions will appear here."/>}</section>
     {news.length > 0 && <section className="section-block"><div className="section-heading"><div><span className="eyebrow">ARVO JOURNAL</span><h2>News & updates</h2></div></div><div className="news-grid">{news.slice(0, 3).map((item) => <article className="news-card" key={item._id}>{item.imageUrl && <img src={item.imageUrl} alt="" loading="lazy"/>}<div><span className="eyebrow">{new Date(item.createdAt).toLocaleDateString()}</span><h3>{item.title}</h3><p>{item.body}</p></div></article>)}</div></section>}
     <div className="demo-note"><span className="demo-mark">i</span><span>Wallet figures reflect approved account records. Plan terms are shown as published by the administrator.</span></div>
   </>
 }
 
+function JewelryCarousel({ items }) {
+  const slides = items.filter((item) => item.imageUrl).slice(0, 10)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const touchStartX = useRef(null)
+  const currentIndex = slides.length ? activeIndex % slides.length : 0
+  const active = slides[currentIndex]
+
+  useEffect(() => {
+    if (slides.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
+    const timer = window.setInterval(() => setActiveIndex((index) => (index + 1) % slides.length), 5200)
+    return () => window.clearInterval(timer)
+  }, [slides.length])
+
+  if (!active) return null
+  const move = (direction) => setActiveIndex((index) => (index + direction + slides.length) % slides.length)
+  const content = <>
+    <img className="jewelry-carousel-image" src={active.imageUrl} alt={active.title || 'Jewellery collection'} />
+    <div className="jewelry-carousel-shade"/>
+    <div className="jewelry-carousel-copy"><span className="eyebrow">ARVO · JEWELLERY</span><h2>{active.title || 'Discover the collection'}</h2>{active.body && <p>{active.body}</p>}{active.metadata?.url && <a className="jewelry-carousel-link" href={active.metadata.url} target="_blank" rel="noreferrer">Explore collection <Icon name="chevron" size={14}/></a>}</div>
+    {slides.length > 1 && <><span className="jewelry-carousel-count">{currentIndex + 1} / {slides.length}</span><div className="jewelry-carousel-controls"><button type="button" onClick={() => move(-1)} aria-label="Previous jewelry image"><Icon name="chevron" size={17}/></button><button type="button" onClick={() => move(1)} aria-label="Next jewelry image"><Icon name="chevron" size={17}/></button></div><div className="jewelry-carousel-dots" aria-label="Choose jewelry image">{slides.map((slide, index) => <button key={slide._id || slide.slug} type="button" className={index === currentIndex ? 'active' : ''} onClick={() => setActiveIndex(index)} aria-label={`Show image ${index + 1}`}/>)}</div></>}
+  </>
+  return <section className="jewelry-carousel" aria-label="Jewellery image carousel" aria-roledescription="carousel"><div className="jewelry-carousel-slide" onTouchStart={(event) => { touchStartX.current = event.touches[0]?.clientX ?? null }} onTouchEnd={(event) => { if (touchStartX.current == null) return; const delta = event.changedTouches[0]?.clientX - touchStartX.current; touchStartX.current = null; if (Math.abs(delta) > 45) move(delta < 0 ? 1 : -1) }}>{content}</div></section>
+}
+
 function PlansPage({ plans, onOpenPlan, wallet }) {
   const [selectedCategory, setSelectedCategory] = useState('Daily')
   const categories = ['Daily', 'VIP']
-  const visiblePlans = plans.filter((plan) => (plan.category || 'Investment plan') === selectedCategory).sort((a, b) => planArtworkVariant(a) - planArtworkVariant(b))
+  const visiblePlans = orderPlanCatalog(plans.filter((plan) => (plan.category || 'Investment plan') === selectedCategory))
   return <>
     <PageHeading eyebrow="ARVO INVESTMENT PLANS" title="Investment plans" subtitle="Compare investment amounts, daily profit, durations and plan limits."/>
     <div className="plan-intro"><div className="intro-seal"><Icon name="spark" size={24}/></div><div><strong>One clear card per plan.</strong><p>Total profit is calculated as daily profit × duration in days.</p></div></div>
@@ -484,16 +522,16 @@ function PlanDetail({ plan, onBack, onApply, signedOut, onSignIn, wallet }) {
     <div className="detail-grid">
       <div>
         <div className={`detail-art plan-art ${['gold','green','blue'][planArtworkVariant(plan) % 3]} ${plan.imageUrl ? 'has-image' : ''}`}>{plan.imageUrl ? <img className="plan-art-image" src={plan.imageUrl} alt="" fetchPriority="high"/> : isPowerBankPlan(plan) ? <PowerBankArt variant={planArtworkVariant(plan)}/> : <span className="plan-symbol"><Icon name="spark" size={34}/></span>}<span className="plan-art-label">ARVO · {plan.category || 'PLAN'} · {String(planArtworkVariant(plan) + 1).padStart(2, '0')}</span><span className="plan-orbit orbit-one"/><span className="plan-orbit orbit-two"/></div>
-        <div className="detail-overview"><span className="eyebrow">{plan.category || 'INVESTMENT PLAN'}</span>{(plan.comingSoon || !plan.termsReady) && <span className="plan-availability is-muted">{plan.comingSoon ? 'Coming soon' : 'Terms pending'}</span>}<h1>{plan.name}</h1><p>{plan.summary}</p></div>
+        <div className="detail-overview"><span className="eyebrow">{plan.category || 'INVESTMENT PLAN'}</span>{plan.comingSoon && <span className="plan-availability is-muted">Coming soon</span>}<h1>{plan.name}</h1><p>{plan.summary}</p></div>
         <div className="detail-panel">
           <span className="eyebrow">PLAN OVERVIEW</span><h2>Published information</h2><p>{plan.details || 'The administrator has not added further plan information.'}</p>
           <div className="detail-facts">
             <div><span>Investment amount</span><strong>{formatUSDT(plan.pricePaise, true)}</strong></div>
-            <div><span>{payoutLabel}</span><strong>{plan.termsReady ? formatUSDT(plan.profitPerCyclePaise || 0, true) : 'Not set'}</strong></div>
-            <div><span>Duration</span><strong>{plan.termsReady ? durationLabel(plan.durationDays) : 'Not set'}</strong></div>
-            <div><span>Total profit</span><strong>{plan.termsReady ? formatUSDT(plan.profitReturnPaise || 0, true) : 'Not set'}</strong></div>
-            <div><span>Investment cycle</span><strong>{plan.termsReady ? cycleLabel(plan.cycle) : 'Not set'}</strong></div>
-            <div><span>Investment ROI</span><strong>{plan.termsReady ? `${Number(plan.investmentRoiPct || 0)}%` : 'Not set'}</strong></div>
+            <div><span>{payoutLabel}</span><strong>{plan.termsReady ? formatUSDT(plan.profitPerCyclePaise || 0, true) : '—'}</strong></div>
+            <div><span>Duration</span><strong>{plan.termsReady ? durationLabel(plan.durationDays) : '—'}</strong></div>
+            <div><span>Total profit</span><strong>{plan.termsReady ? formatUSDT(plan.profitReturnPaise || 0, true) : '—'}</strong></div>
+            <div><span>Investment cycle</span><strong>{plan.termsReady ? cycleLabel(plan.cycle) : '—'}</strong></div>
+            <div><span>Investment ROI</span><strong>{plan.termsReady ? `${Number(plan.investmentRoiPct || 0)}%` : '—'}</strong></div>
             <div><span>Purchase limit</span><strong>{used}/{limit}</strong></div>
             <div><span>Risk information</span><strong>{plan.riskLabel || 'See plan documents'}</strong></div>
             <div><span>Terms document</span><strong>{plan.termsUrl ? <a href={plan.termsUrl} target="_blank" rel="noreferrer">Open terms</a> : 'Not supplied'}</strong></div>
@@ -501,14 +539,14 @@ function PlanDetail({ plan, onBack, onApply, signedOut, onSignIn, wallet }) {
         </div>
       </div>
       <aside className="detail-aside">
-        <span className="eyebrow">PLAN ACCESS</span><h3>{plan.comingSoon ? 'Coming soon.' : !plan.termsReady ? 'Terms pending.' : reachedLimit ? 'Limit reached.' : 'Buy this plan.'}</h3>
-        <p>{plan.comingSoon ? 'This plan is not accepting applications yet.' : !plan.termsReady ? 'The administrator must publish daily profit, duration and total profit before applications open.' : reachedLimit ? 'You have reached the administrator-set purchase limit for this plan.' : 'This sends a purchase request for review. Your wallet is charged only after administrator approval.'}</p>
+        <span className="eyebrow">PLAN ACCESS</span><h3>{plan.comingSoon ? 'Coming soon.' : !plan.termsReady ? 'Plan unavailable.' : reachedLimit ? 'Limit reached.' : 'Buy this plan.'}</h3>
+        <p>{plan.comingSoon ? 'This plan is not accepting applications yet.' : !plan.termsReady ? 'This plan can’t accept applications yet.' : reachedLimit ? 'You have reached the administrator-set purchase limit for this plan.' : 'This sends a purchase request for review. Your wallet is charged only after administrator approval.'}</p>
         <div className="aside-divider"/>
         <div className="aside-row"><span>Investment amount</span><strong>{formatUSDT(plan.pricePaise, true)}</strong></div>
-        <div className="aside-row"><span>{payoutLabel}</span><strong>{plan.termsReady ? formatUSDT(plan.profitPerCyclePaise || 0, true) : 'Not set'}</strong></div>
-        <div className="aside-row"><span>Total profit · duration</span><strong>{plan.termsReady ? `${formatUSDT(plan.profitReturnPaise || 0, true)} · ${durationLabel(plan.durationDays)}` : 'Not set'}</strong></div>
+        <div className="aside-row"><span>{payoutLabel}</span><strong>{plan.termsReady ? formatUSDT(plan.profitPerCyclePaise || 0, true) : '—'}</strong></div>
+        <div className="aside-row"><span>Total profit · duration</span><strong>{plan.termsReady ? `${formatUSDT(plan.profitReturnPaise || 0, true)} · ${durationLabel(plan.durationDays)}` : '—'}</strong></div>
         <div className="aside-row"><span>Limit used</span><strong>{used}/{limit}</strong></div>
-        {plan.comingSoon ? <button type="button" className="outline-button full-button" disabled>Coming soon</button> : !plan.termsReady ? <button type="button" className="outline-button full-button" disabled>Terms pending</button> : reachedLimit ? <button type="button" className="outline-button full-button" disabled>Limit reached</button> : <form onSubmit={submit}><label className="field-label" htmlFor="apply-amount">Investment amount (USDT)</label><input className="form-input" id="apply-amount" value={plan.price} readOnly inputMode="decimal" required/><button className="primary-button full-button apply-button" disabled={busy}>{busy ? 'Submitting…' : signedOut ? 'Sign in to continue' : 'Buy now · Request review'} <Icon name="chevron" size={16}/></button></form>}
+        {plan.comingSoon ? <button type="button" className="outline-button full-button" disabled>Coming soon</button> : !plan.termsReady ? <button type="button" className="outline-button full-button" disabled>Unavailable</button> : reachedLimit ? <button type="button" className="outline-button full-button" disabled>Limit reached</button> : <form onSubmit={submit}><label className="field-label" htmlFor="apply-amount">Investment amount (USDT)</label><input className="form-input" id="apply-amount" value={plan.price} readOnly inputMode="decimal" required/><button className="primary-button full-button apply-button" disabled={busy}>{busy ? 'Submitting…' : signedOut ? 'Sign in to continue' : 'Buy now · Request review'} <Icon name="chevron" size={16}/></button></form>}
         {error && <p className="form-error">{error}</p>}
         <span className="small-legal">Published figures follow administrator-set terms. Return amounts are not credited automatically.</span>
       </aside>
@@ -955,7 +993,7 @@ function AdminSupportPanel() {
 }
 
 const contentKinds = [
-  ['news', 'News'], ['banner', 'Banner'], ['work_area', 'Work area'], ['about', 'About'], ['service', 'Services'], ['investor', 'Investors'], ['partner', 'Partners'], ['social', 'Socials'], ['menu', 'Menu'], ['logo', 'Logo'], ['icon', 'Icon'],
+  ['news', 'News'], ['banner', 'Jewellery carousel'], ['work_area', 'Work area'], ['about', 'About'], ['service', 'Services'], ['investor', 'Investors'], ['partner', 'Partners'], ['social', 'Socials'], ['menu', 'Menu'], ['logo', 'Logo'], ['icon', 'Icon'],
 ]
 
 function ContentManager({ onChanged }) {
@@ -964,6 +1002,9 @@ function ContentManager({ onChanged }) {
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const bannerImageCount = items.length
+  const otherBannerImageCount = items.filter((item) => item._id !== form?._id).length
+  const bannerLimitReached = type === 'banner' && otherBannerImageCount >= 10
   async function load() {
     try { const result = await api(`/admin/content?type=${type}`); setItems(result.items || []); setError('') } catch (err) { setError(err.message) }
   }
@@ -981,7 +1022,7 @@ function ContentManager({ onChanged }) {
     setBusy(true); setError('')
     try { await api(`/admin/content/${item._id}`, { method: 'DELETE' }); await load(); await onChanged() } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
-  return <div className="content-manager"><div className="content-manager-head"><div><span className="eyebrow">WEBSITE & NEWS CONTENT</span><h2>Content management</h2><p>Manage announcements, website sections, social links, navigation, logo and icon records.</p></div><button className="primary-button" onClick={() => setForm(blank())}><Icon name="plus" size={16}/> Add content</button></div><div className="content-type-tabs">{contentKinds.map(([key, label]) => <button key={key} className={type === key ? 'selected' : ''} onClick={() => setType(key)}>{label}</button>)}</div>{error && <p className="form-error admin-error">{error}</p>}{form && <form className="admin-form-card content-edit-form" onSubmit={save}><div className="content-form-heading"><div><span className="eyebrow">{form._id ? 'EDIT ITEM' : 'NEW ITEM'}</span><h3>{contentKinds.find(([key]) => key === type)?.[1]}</h3></div><button type="button" className="text-button" onClick={() => setForm(null)}>Cancel</button></div><label>Title<input className="form-input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required maxLength="160"/></label><label>Slug<input className="form-input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} placeholder="Auto-generated from title"/></label><label>Text / details<textarea className="form-input" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} maxLength="12000" rows="5"/></label><label>Image URL<input className="form-input" type="url" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://"/></label><label>Link URL<input className="form-input" type="url" value={form.metadata?.url || ''} onChange={(e) => setForm({ ...form, metadata: { ...(form.metadata || {}), url: e.target.value } })} placeholder="https://"/></label><div className="form-pair"><label>Language code<input className="form-input" value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value.toLowerCase() })} maxLength="12"/></label><label>Display order<input className="form-input" type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}/></label></div><label className="checkbox-row"><input type="checkbox" checked={form.isPublished} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })}/> Published</label><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save content'}</button></form>}<div className="admin-table-card content-list">{items.length ? items.map((item) => <div className="admin-list-row" key={item._id}><div><strong>{item.title}</strong><span>{item.language} · /{item.slug} · {item.isPublished ? 'Published' : 'Draft'}</span></div><button className="outline-button compact-button" onClick={() => setForm({ ...item, metadata: item.metadata || { url: '' } })}>Edit</button><button className="text-button" disabled={busy} onClick={() => remove(item)}>Delete</button></div>) : <EmptyState title={`No ${contentKinds.find(([key]) => key === type)?.[1].toLowerCase()} items`} description="Add a content item to publish it here."/>}</div></div>
+  return <div className="content-manager"><div className="content-manager-head"><div><span className="eyebrow">WEBSITE & NEWS CONTENT</span><h2>Content management</h2><p>{type === 'banner' ? 'Add up to 10 jewelry images to the Home screen carousel. Set display order to choose the slide sequence.' : 'Manage announcements, website sections, social links, navigation, logo and icon records.'}</p></div><button className="primary-button" disabled={type === 'banner' && bannerImageCount >= 10} onClick={() => setForm(blank())}><Icon name="plus" size={16}/>{type === 'banner' ? bannerImageCount >= 10 ? '10 images reached' : 'Add slide' : 'Add content'}</button></div><div className="content-type-tabs">{contentKinds.map(([key, label]) => <button key={key} className={type === key ? 'selected' : ''} onClick={() => setType(key)}>{label}</button>)}</div>{type === 'banner' && <p className="carousel-limit-note">{Math.min(bannerImageCount, 10)} of 10 carousel images</p>}{error && <p className="form-error admin-error">{error}</p>}{form && <form className="admin-form-card content-edit-form" onSubmit={save}><div className="content-form-heading"><div><span className="eyebrow">{form._id ? 'EDIT ITEM' : 'NEW ITEM'}</span><h3>{contentKinds.find(([key]) => key === type)?.[1]}</h3></div><button type="button" className="text-button" onClick={() => setForm(null)}>Cancel</button></div><label>Title<input className="form-input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required maxLength="160"/></label><label>Slug<input className="form-input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} placeholder="Auto-generated from title"/></label><label>Text / details<textarea className="form-input" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} maxLength="12000" rows="5"/></label><label>Image URL<input className="form-input" type="url" value={form.imageUrl.startsWith('data:') ? '' : form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder={type === 'banner' ? 'https://.../jewellery-image.jpg' : 'https://'} required={type === 'banner' && form.isPublished && !form.imageUrl}/></label>{type === 'banner' && <label>Or upload an image<input className="form-input" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setBusy(true); setError(''); try { const imageUrl = await compressPlanImage(file, 230000); setForm((current) => current ? { ...current, imageUrl } : current) } catch (uploadError) { setError(uploadError.message) } finally { setBusy(false); event.target.value = '' } }}/><small>JPEG, PNG or WebP · compressed for mobile · up to 10 slides</small></label>}{type === 'banner' && form.imageUrl && <img className="carousel-image-preview" src={form.imageUrl} alt="Carousel preview"/>}<label>Link URL<input className="form-input" type="url" value={form.metadata?.url || ''} onChange={(e) => setForm({ ...form, metadata: { ...(form.metadata || {}), url: e.target.value } })} placeholder="https://"/></label><div className="form-pair"><label>Language code<input className="form-input" value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value.toLowerCase() })} maxLength="12"/></label><label>Display order<input className="form-input" type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}/></label></div><label className="checkbox-row"><input type="checkbox" checked={form.isPublished} disabled={!form.isPublished && bannerLimitReached} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })}/> Published {type === 'banner' && bannerLimitReached && !form.isPublished && <span className="optional-label">10-slide limit reached</span>}</label><button className="primary-button" disabled={busy || (type === 'banner' && bannerLimitReached)}>{busy ? 'Saving…' : 'Save content'}</button></form>}{type === 'banner' && bannerLimitReached && !form?._id && <p className="form-error">Delete an image before adding another.</p>}<div className="admin-table-card content-list">{items.length ? items.map((item) => <div className="admin-list-row" key={item._id}><div><strong>{item.title}</strong><span>{item.language} · /{item.slug} · {item.isPublished ? 'Published' : 'Draft'}</span></div><button className="outline-button compact-button" onClick={() => setForm({ ...item, metadata: item.metadata || { url: '' } })}>Edit</button><button className="text-button" disabled={busy} onClick={() => remove(item)}>Delete</button></div>) : <EmptyState title={`No ${contentKinds.find(([key]) => key === type)?.[1].toLowerCase()} items`} description="Add a content item to publish it here."/>}</div></div>
 }
 
 function AdminPlanTerms({ plan, busy, onSave }) {
