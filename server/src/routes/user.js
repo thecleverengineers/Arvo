@@ -96,7 +96,7 @@ router.get('/profile', requireAuth, asyncRoute(async (req, res) => res.json({ us
 
 router.patch('/profile/avatar', requireAuth, asyncRoute(async (req, res) => {
   const parsed = z.object({
-    avatarUrl: z.string().max(180_000).refine((value) => value === '' || /^data:image\\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value), 'Upload a compressed JPEG profile photo.'),
+    avatarUrl: z.string().max(180_000).refine((value) => value === '' || /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value), 'Upload a compressed JPEG profile photo.'),
   }).safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
   req.user.avatarUrl = parsed.data.avatarUrl
