@@ -105,7 +105,6 @@ router.patch('/profile/avatar', requireAuth, asyncRoute(async (req, res) => {
 }))
 
 router.post('/profile/mpin/otp', requireAuth, mpinLimiter, asyncRoute(async (req, res) => {
-  if (req.user.profileStatus !== 'verified') return res.status(403).json({ error: 'Complete profile verification before creating a withdrawal MPIN.' })
   const intent = req.user.mpinHash ? 'mpin_reset' : 'mpin_setup'
   const mobile = req.user.mobile
   const now = new Date()
@@ -124,7 +123,6 @@ router.post('/profile/mpin/otp', requireAuth, mpinLimiter, asyncRoute(async (req
 }))
 
 router.post('/profile/mpin', requireAuth, mpinLimiter, asyncRoute(async (req, res) => {
-  if (req.user.profileStatus !== 'verified') return res.status(403).json({ error: 'Complete profile verification before creating a withdrawal MPIN.' })
   const parsed = z.object({ otp: z.string().trim().regex(/^\d{4,10}$/), mpin: z.string().regex(/^\d{6}$/) }).safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: 'Enter the OTP and a six-digit MPIN.' })
   const intent = req.user.mpinHash ? 'mpin_reset' : 'mpin_setup'
@@ -154,14 +152,6 @@ router.patch('/profile', requireAuth, asyncRoute(async (req, res) => {
   if (emailChanged) req.user.emailVerifiedAt = null
   await req.user.save()
   res.json({ user: safeUser(req.user, { includeAvatar: true }) })
-}))
-
-router.post('/profile/verification', requireAuth, asyncRoute(async (req, res) => {
-  if (!req.user.name || !req.user.email || !req.user.emailVerifiedAt) return res.status(400).json({ error: 'Add your name and verify your email before submitting profile verification.' })
-  if (req.user.profileStatus === 'pending' || req.user.profileStatus === 'verified') return res.status(409).json({ error: 'Your profile verification is already in progress or complete.' })
-  req.user.profileStatus = 'pending'
-  await req.user.save()
-  res.json({ user: safeUser(req.user, { includeAvatar: true }), message: 'Your profile is queued for administrator review.' })
 }))
 
 router.get('/wallet', requireAuth, asyncRoute(async (req, res) => {
@@ -210,8 +200,7 @@ router.post('/deposits', requireAuth, asyncRoute(async (req, res) => {
 router.post('/withdrawals', requireAuth, asyncRoute(async (req, res) => {
   const requestKey = getRequestKey(req, res)
   if (!requestKey) return
-  if (req.user.profileStatus !== 'verified') return res.status(403).json({ error: 'Profile verification is required before requesting a withdrawal.' })
-  if (!req.user.mpinHash) return res.status(409).json({ error: 'Create a withdrawal MPIN from your verified profile before requesting a withdrawal.' })
+  if (!req.user.mpinHash) return res.status(409).json({ error: 'Create a withdrawal MPIN from your Profile before requesting a withdrawal.' })
   const mpin = String(req.body?.mpin || '').trim()
   if (!/^\d{6}$/.test(mpin)) return res.status(400).json({ error: 'Enter your six-digit withdrawal MPIN.' })
   if (!await verifyMpin(req.user.mpinHash, mpin)) return res.status(401).json({ error: 'The withdrawal MPIN is incorrect.' })
