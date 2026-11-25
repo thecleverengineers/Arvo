@@ -465,7 +465,6 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
 .settings-theme-name strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .settings-theme-name small { color: var(--muted); font-size: 9px; }
 .settings-theme-card > svg { flex: 0 0 auto; color: var(--accent-strong); }
-#kyc-section { scroll-margin-top: 90px; }
 @media (max-width: 640px) {
   .account-menu { top: calc(100% + 8px); right: -4px; border-radius: 16px; }
   .account-menu-item { min-height: 46px; font-size: 13px; }
