@@ -6,6 +6,7 @@ const userSchema = new Schema({
   mobile: { type: String, required: true, unique: true, index: true },
   name: { type: String, trim: true, maxlength: 100, default: '' },
   email: { type: String, trim: true, lowercase: true, maxlength: 254, default: '' },
+  avatarUrl: { type: String, maxlength: 180_000, default: '' },
   emailVerifiedAt: { type: Date, default: null },
   role: { type: String, enum: ['user', 'admin'], default: 'user', index: true },
   status: { type: String, enum: ['active', 'blocked'], default: 'active', index: true },
