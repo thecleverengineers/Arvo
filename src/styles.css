@@ -348,8 +348,13 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
   .page-heading { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 19px; }
   .page-heading p { max-width: 100%; }
   .page-heading .secondary-button { min-height: 42px; padding: 0 14px; font-size: 12px; }
-  .all-plans { grid-template-columns: 1fr; }
-  .all-plans .plan-card-body p { font-size: 12px; }
+  .all-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .all-plans .plan-art { height: 156px; padding: 11px; }
+  .all-plans .plan-card-body { padding: 12px 11px; }
+  .all-plans .plan-card-body p { min-height: 54px; font-size: 10px; }
+  .all-plans .plan-title-row { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .all-plans .plan-title-row h3 { font-size: 13px; }
+  .all-plans .plan-card-metrics { grid-template-columns: 1fr; gap: 7px; }
   .detail-grid { grid-template-columns: 1fr; }
   .detail-aside { position: static; }
   .wallet-overview { gap: 16px; padding: 18px; border-radius: 19px; }
