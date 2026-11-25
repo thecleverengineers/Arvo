@@ -92,7 +92,17 @@ router.get('/content/:type', asyncRoute(async (req, res) => {
   res.json({ items })
 }))
 
-router.get('/profile', requireAuth, asyncRoute(async (req, res) => res.json({ user: safeUser(req.user) })))
+router.get('/profile', requireAuth, asyncRoute(async (req, res) => res.json({ user: safeUser(req.user, { includeAvatar: true }) })))
+
+router.patch('/profile/avatar', requireAuth, asyncRoute(async (req, res) => {
+  const parsed = z.object({
+    avatarUrl: z.string().max(180_000).refine((value) => value === '' || /^data:image\\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value), 'Upload a compressed JPEG profile photo.'),
+  }).safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
+  req.user.avatarUrl = parsed.data.avatarUrl
+  await req.user.save()
+  res.json({ user: safeUser(req.user, { includeAvatar: true }) })
+}))
 
 router.post('/profile/mpin/otp', requireAuth, mpinLimiter, asyncRoute(async (req, res) => {
   if (req.user.profileStatus !== 'verified') return res.status(403).json({ error: 'Complete profile verification before creating a withdrawal MPIN.' })
@@ -131,7 +141,7 @@ router.post('/profile/mpin', requireAuth, mpinLimiter, asyncRoute(async (req, re
   if (!claimed) return res.status(409).json({ error: 'This OTP was already used. Request a new code.' })
   req.user.mpinHash = await hashMpin(parsed.data.mpin)
   await req.user.save()
-  res.json({ ok: true, user: safeUser(req.user), message: 'Withdrawal MPIN saved securely.' })
+  res.json({ ok: true, user: safeUser(req.user, { includeAvatar: true }), message: 'Withdrawal MPIN saved securely.' })
 }))
 
 router.patch('/profile', requireAuth, asyncRoute(async (req, res) => {
@@ -143,7 +153,7 @@ router.patch('/profile', requireAuth, asyncRoute(async (req, res) => {
   req.user.email = parsed.data.email || ''
   if (emailChanged) req.user.emailVerifiedAt = null
   await req.user.save()
-  res.json({ user: safeUser(req.user) })
+  res.json({ user: safeUser(req.user, { includeAvatar: true }) })
 }))
 
 router.post('/profile/verification', requireAuth, asyncRoute(async (req, res) => {
@@ -151,7 +161,7 @@ router.post('/profile/verification', requireAuth, asyncRoute(async (req, res) =>
   if (req.user.profileStatus === 'pending' || req.user.profileStatus === 'verified') return res.status(409).json({ error: 'Your profile verification is already in progress or complete.' })
   req.user.profileStatus = 'pending'
   await req.user.save()
-  res.json({ user: safeUser(req.user), message: 'Your profile is queued for administrator review.' })
+  res.json({ user: safeUser(req.user, { includeAvatar: true }), message: 'Your profile is queued for administrator review.' })
 }))
 
 router.get('/wallet', requireAuth, asyncRoute(async (req, res) => {
