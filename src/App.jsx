@@ -15,6 +15,7 @@ const iconPaths = {
   wallet: <><rect x="3" y="5" width="18" height="15" rx="3"/><path d="M3 9h18M16 15h2"/><path d="M6 5V3h12"/></>,
   users: <><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>,
   user: <><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></>,
+  camera: <><path d="M14.5 4h-5L8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3l-1.5-2Z"/><circle cx="12" cy="13" r="3"/></>,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
   chevron: <path d="m9 18 6-6-6-6"/>,
   sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></>,
@@ -240,6 +241,12 @@ function App() {
     notify('Profile updated')
   }
 
+  async function saveProfilePhoto(avatarUrl) {
+    const result = await api('/profile/avatar', { method: 'PATCH', body: { avatarUrl } })
+    setUser(result.user)
+    notify(avatarUrl ? 'Profile photo updated' : 'Profile photo removed')
+  }
+
   async function verifyProfile() {
     const result = await api('/profile/verification', { method: 'POST', body: {} })
     setUser(result.user)
@@ -308,7 +315,7 @@ function App() {
         {page === 'Income' && <IncomePage income={income} onWallet={() => navigate('Wallet')}/>}
         {page === 'RechargeDetails' && <WalletRequestHistory type="deposit" wallet={wallet} onAction={setAction}/>}
         {page === 'WithdrawalDetails' && <WalletRequestHistory type="withdrawal" wallet={wallet} onAction={setAction}/>}
-        {page === 'My' && <MyPage user={user} wallet={wallet} income={income} onNavigate={navigate} onLogout={logout} onKyc={() => openAccountItem('kyc')} onAdmin={() => navigate('Admin')}/>}
+        {page === 'My' && <MyPage user={user} wallet={wallet} income={income} onNavigate={navigate} onLogout={logout} onKyc={() => openAccountItem('kyc')} onAdmin={() => navigate('Admin')} onSavePhoto={saveProfilePhoto}/>}
         {page === 'Bonuses' && <BonusPage rewards={rewards} onClaim={claimReward}/>}
         {page === 'About' && <AboutPage items={about}/>}
         {page === 'Install' && <InstallPage installPrompt={installPrompt} onInstall={installArvo}/>}
@@ -615,8 +622,11 @@ function IncomePage({ income, onWallet }) {
   return <><PageHeading eyebrow="YOUR ACCOUNT ACTIVITY" title="Income details" subtitle="Review posted plan returns, rewards and pending claims." action={<button className="secondary-button" onClick={onWallet}>Open wallet</button>}/><section className="income-summary-card"><div><span className="eyebrow">TOTAL POSTED INCOME</span><strong>{formatUSDT(income?.paidPaise||0,true)}</strong></div><p>Only posted entries have been credited to your wallet.</p></section><section className="section-block"><div className="section-heading"><div><span className="eyebrow">INCOME LEDGER</span><h2>Posted activity</h2></div></div>{entries.length?<div className="income-list">{entries.map((entry)=><div className="income-row" key={entry._id}><span className="income-row-icon"><Icon name="chart" size={17}/></span><div><strong>{labels[entry.kind]||entry.kind}</strong><span>{entry.description||'Wallet credit'} · {new Date(entry.createdAt).toLocaleString()}</span></div><div className="income-row-value"><strong>+{formatUSDT(entry.amountPaise,true)}</strong><StatusPill status={entry.status}/></div></div>)}</div>:<EmptyState title="No income entries yet" description="Approved returns and rewards will appear here."/>}</section><section className="section-block"><div className="section-heading"><div><span className="eyebrow">BONUS REQUESTS</span><h2>Claim status</h2></div></div>{claims.length?<div className="request-list">{claims.map((claim)=><div className="request-row" key={claim._id}><div><strong>{labels[claim.kind]||claim.kind} · {formatUSDT(claim.amountPaise,true)}</strong><span>Submitted {new Date(claim.createdAt).toLocaleString()}{claim.reviewNote?' · '+claim.reviewNote:''}</span></div><StatusPill status={claim.status}/></div>)}</div>:<EmptyState title="No bonus claims" description="Eligible rewards can be requested from Bonuses."/>}</section></>
 }
 
-function MyPage({ user, wallet, income, onNavigate, onLogout, onKyc, onAdmin }) {
+function MyPage({ user, wallet, income, onNavigate, onLogout, onKyc, onAdmin, onSavePhoto }) {
   const balance = wallet?.wallet?.availablePaise || 0
+  const photoInput = useRef(null)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState('')
   const links = [
     ['Messages', 'bell', 'Messages', 'Read replies and contact Arvo support.'],
     ['Personal information', 'user', 'Profile', 'Edit your name and contact details.'],
@@ -634,7 +644,40 @@ function MyPage({ user, wallet, income, onNavigate, onLogout, onKyc, onAdmin }) 
     if (destination === 'kyc') return onKyc()
     onNavigate(destination)
   }
+  async function changePhoto(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setPhotoError('')
+    setPhotoBusy(true)
+    try {
+      const avatarUrl = await compressPlanImage(file, 160_000)
+      await onSavePhoto(avatarUrl)
+    } catch (error) {
+      setPhotoError(error.message || 'Could not update your profile photo.')
+    } finally {
+      setPhotoBusy(false)
+      event.target.value = ''
+    }
+  }
+  async function removePhoto() {
+    setPhotoError('')
+    setPhotoBusy(true)
+    try { await onSavePhoto('') }
+    catch (error) { setPhotoError(error.message || 'Could not remove your profile photo.') }
+    finally { setPhotoBusy(false) }
+  }
   return <><PageHeading eyebrow="YOUR ARVO ACCOUNT" title="My" subtitle="Your balance, account details and preferences."/>
+    <section className="my-profile-summary" aria-label="Your profile">
+      <button type="button" className="my-profile-photo-button" onClick={() => photoInput.current?.click()} disabled={photoBusy} aria-label={photoBusy ? 'Updating profile photo' : 'Change profile photo'}>
+        {user.avatarUrl ? <img className="my-profile-photo" src={user.avatarUrl} alt="Your profile"/> : <span className="my-profile-photo-fallback">{initials(user.name)}</span>}
+        <span className="my-profile-photo-edit"><Icon name="camera" size={15}/></span>
+      </button>
+      <input ref={photoInput} className="my-profile-photo-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={changePhoto}/>
+      <h2 className="my-profile-name">{user.name || 'Arvo member'}</h2>
+      <div className="my-profile-contacts"><span>+91 {user.mobile}</span><i aria-hidden="true"/><span>{user.email || 'Email not added'}</span></div>
+      <div className="my-profile-photo-actions"><span>{photoBusy ? 'Updating photo…' : 'Tap photo to change'}</span>{user.avatarUrl && <><b aria-hidden="true">·</b><button type="button" onClick={removePhoto} disabled={photoBusy}>Remove photo</button></>}</div>
+      {photoError && <p className="my-profile-photo-error" role="alert">{photoError}</p>}
+    </section>
     <section className="my-overview" aria-label="Account summary">
       <button onClick={() => onNavigate('Wallet')}><span>Balance</span><strong>{formatUSDT(balance, true)}</strong></button>
       <span className="my-overview-divider"/>
