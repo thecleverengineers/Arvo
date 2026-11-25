@@ -389,6 +389,16 @@ async function teamLevelsFor(user) {
   return levels
 }
 
+async function teamMembersQueryFor(user, targetLevel) {
+  let codes = user.referralCode ? [user.referralCode] : []
+  for (let level = 1; level < targetLevel && codes.length; level += 1) {
+    const parents = await User.find({ referredBy: { $in: codes }, status: 'active' }).select('referralCode').lean()
+    codes = parents.map((member) => member.referralCode).filter(Boolean)
+  }
+  return codes.length ? { referredBy: { $in: codes }, status: 'active' } : null
+}
+
+
 router.get('/referrals', requireAuth, asyncRoute(async (req, res) => {
   const levels = await teamLevelsFor(req.user)
   res.json({
@@ -396,6 +406,100 @@ router.get('/referrals', requireAuth, asyncRoute(async (req, res) => {
     levels: levels.map((level) => ({ ...level, members: [] })),
     totalMembers: levels.reduce((sum, item) => sum + item.count, 0),
     rewardsEnabled: Boolean((await PlatformSettings.findOne({ key: 'main' }).select('rewards.enabled').lean())?.rewards?.enabled),
+  })
+}))
+
+router.get('/team/levels/:level/members', requireAuth, asyncRoute(async (req, res) => {
+  const level = Number(req.params.level)
+  if (!Number.isInteger(level) || level < 1 || level > 3) return res.status(400).json({ error: 'Choose a team level from 1 to 3.' })
+  const requestedPage = Number(req.query.page)
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, 10000) : 1
+  const pageSize = 20
+  const query = await teamMembersQueryFor(req.user, level)
+  if (!query) return res.json({ level, page, pageSize, totalMembers: 0, members: [] })
+  const [totalMembers, memberDocs] = await Promise.all([
+    User.countDocuments(query),
+    User.find(query).select('_id name mobile createdAt').sort({ createdAt: -1, _id: 1 }).skip((page - 1) * pageSize).limit(pageSize).lean(),
+  ])
+  const ids = memberDocs.map((member) => member._id)
+  if (!ids.length) return res.json({ level, page, pageSize, totalMembers, members: [] })
+  const [walletStats, rechargeStats, rewardStats, planStats, purchaseStats, activityRows] = await Promise.all([
+    Wallet.aggregate([
+      { $match: { userId: { $in: ids } } },
+      { $group: { _id: '$userId', investedPaise: { $sum: '$investedPaise' } } },
+    ]),
+    Deposit.aggregate([
+      { $match: { userId: { $in: ids }, status: 'accepted' } },
+      { $group: { _id: '$userId', count: { $sum: 1 }, amountPaise: { $sum: '$amountPaise' } } },
+    ]),
+    LedgerEntry.aggregate([
+      { $match: { userId: { $in: ids }, kind: 'referral_reward', status: 'posted' } },
+      { $group: { _id: '$userId', amountPaise: { $sum: '$amountPaise' } } },
+    ]),
+    PlanPosition.aggregate([
+      { $match: { userId: { $in: ids }, status: 'active' } },
+      { $group: { _id: '$userId', count: { $sum: 1 }, amountPaise: { $sum: '$amountPaise' } } },
+    ]),
+    PlanApplication.aggregate([
+      { $match: { userId: { $in: ids }, status: 'accepted' } },
+      { $group: { _id: '$userId', count: { $sum: 1 }, amountPaise: { $sum: '$amountPaise' } } },
+    ]),
+    LedgerEntry.aggregate([
+      { $match: { userId: { $in: ids }, status: { $ne: 'reversed' } } },
+      { $sort: { createdAt: -1 } },
+      { $setWindowFields: { partitionBy: '$userId', sortBy: { createdAt: -1 }, output: { rowNumber: { $documentNumber: {} } } } },
+      { $match: { rowNumber: { $lte: 6 } } },
+      { $project: { userId: 1, kind: 1, direction: 1, amountPaise: 1, status: 1, description: 1, createdAt: 1 } },
+      { $sort: { createdAt: -1 } },
+    ]),
+  ])
+  const byUser = (rows) => new Map(rows.map((row) => [String(row._id), row]))
+  const walletByUser = byUser(walletStats)
+  const rechargeByUser = byUser(rechargeStats)
+  const rewardByUser = byUser(rewardStats)
+  const plansByUser = byUser(planStats)
+  const purchasesByUser = byUser(purchaseStats)
+  const activityByUser = new Map()
+  for (const activity of activityRows) {
+    const id = String(activity.userId)
+    if (!activityByUser.has(id)) activityByUser.set(id, [])
+    activityByUser.get(id).push({
+      kind: activity.kind,
+      direction: activity.direction,
+      amountPaise: activity.amountPaise,
+      status: activity.status,
+      description: activity.description,
+      createdAt: activity.createdAt,
+    })
+  }
+  res.json({
+    level,
+    page,
+    pageSize,
+    totalMembers,
+    members: memberDocs.map((member) => {
+      const id = String(member._id)
+      const wallet = walletByUser.get(id)
+      const recharges = rechargeByUser.get(id)
+      const rewards = rewardByUser.get(id)
+      const plans = plansByUser.get(id)
+      const purchases = purchasesByUser.get(id)
+      return {
+        id,
+        name: member.name || 'Arvo member',
+        phone: member.mobile,
+        joinedAt: member.createdAt,
+        investor: Number(wallet?.investedPaise || 0) > 0,
+        investedPaise: Number(wallet?.investedPaise || 0),
+        rechargeCount: Number(recharges?.count || 0),
+        rechargePaise: Number(recharges?.amountPaise || 0),
+        rewardsPaidPaise: Number(rewards?.amountPaise || 0),
+        activePlanCount: Number(plans?.count || 0),
+        activePlanValuePaise: Number(plans?.amountPaise || 0),
+        planPurchaseCount: Number(purchases?.count || 0),
+        activities: activityByUser.get(id) || [],
+      }
+    }),
   })
 }))
 
