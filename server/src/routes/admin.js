@@ -67,7 +67,7 @@ router.get('/users', asyncRoute(async (req, res) => {
 }))
 
 router.patch('/users/:id', asyncRoute(async (req, res) => {
-  const parsed = z.object({ status: z.enum(['active', 'blocked']).optional(), profileStatus: z.enum(['not_started', 'pending', 'verified', 'rejected']).optional(), role: z.enum(['user', 'admin']).optional(), name: z.string().trim().max(100).optional() }).safeParse(req.body)
+  const parsed = z.object({ status: z.enum(['active', 'blocked']).optional(), role: z.enum(['user', 'admin']).optional(), name: z.string().trim().max(100).optional() }).safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
   const user = await User.findById(req.params.id)
   if (!user) return res.status(404).json({ error: 'User not found.' })
