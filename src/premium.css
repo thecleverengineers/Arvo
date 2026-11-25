@@ -559,3 +559,12 @@ body { background: #e8e9e8; }
 .admin-plan-profit-preview { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid var(--border); border-radius:11px; background:var(--card-soft); color:var(--muted); font-size:10px; }
 .admin-plan-profit-preview strong { color:var(--accent-strong); font-size:13px; font-weight:800; white-space:nowrap; }
 .admin-plan-example { grid-column:1 / -1; margin:0; color:var(--muted); font-size:10px; line-height:1.45; }
+
+
+/* Keep the home preview at two plans per row on small screens. */
+@media (max-width:640px) {
+  .app-shell[data-view="mobile"] .plan-grid.home-plans {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+  }
+}
