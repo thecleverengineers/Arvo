@@ -218,7 +218,9 @@ function App() {
 
   async function submitPlan(plan, amount, requestKey) {
     const result = await api(`/plans/${plan.id}/apply`, { method: 'POST', body: { amount }, headers: { 'Idempotency-Key': requestKey } })
-    notify('Plan request sent for administrator review')
+    notify(result.application?.status === 'accepted'
+      ? 'Plan activated and amount deducted from your wallet.'
+      : 'This earlier plan request is still pending review and has not been charged.')
     await loadAccountData()
     return result
   }
@@ -519,7 +521,7 @@ function PlansPage({ plans, onOpenPlan, wallet }) {
     <PageHeading eyebrow="ARVO INVESTMENT PLANS" title="Investment plans" subtitle="Compare investment amounts, daily profit, durations and plan limits."/>
     <div className="plan-intro"><div className="intro-seal"><Icon name="spark" size={24}/></div><div><strong>One clear card per plan.</strong><p>Total profit is calculated as daily profit × duration in days.</p></div></div>
     <PlanCatalog plans={plans} wallet={wallet} onOpenPlan={onOpenPlan}/>
-    <div className="demo-note"><span className="demo-mark">i</span><span>Plan amounts and return schedules are set by the administrator. Applications remain subject to review.</span></div>
+    <div className="demo-note"><span className="demo-mark">i</span><span>Purchases activate immediately and are deducted from the available wallet balance.</span></div>
   </>
 }
 
@@ -530,6 +532,9 @@ function PlanDetail({ plan, onBack, onApply, signedOut, onSignIn, wallet }) {
   const limit = Math.max(1, Number(plan.purchaseLimit) || 2)
   const used = Math.max(0, Number(wallet?.planUsage?.[plan.id] || 0))
   const reachedLimit = !signedOut && used >= limit
+  const walletAvailablePaise = Number(wallet?.wallet?.availablePaise || 0)
+  const hasWallet = Boolean(wallet?.wallet)
+  const insufficientBalance = !signedOut && hasWallet && walletAvailablePaise < Number(plan.pricePaise || 0)
   const payoutLabel = 'Daily profit'
   async function submit(event) {
     event.preventDefault()
@@ -563,9 +568,9 @@ function PlanDetail({ plan, onBack, onApply, signedOut, onSignIn, wallet }) {
         <div className="aside-row"><span>{payoutLabel}</span><strong>{plan.termsReady ? formatUSDT(plan.profitPerCyclePaise || 0, true) : '—'}</strong></div>
         <div className="aside-row"><span>Total profit · duration</span><strong>{plan.termsReady ? `${formatUSDT(plan.profitReturnPaise || 0, true)} · ${durationLabel(plan.durationDays)}` : '—'}</strong></div>
         <div className="aside-row"><span>Limit used</span><strong>{used}/{limit}</strong></div>
-        {plan.comingSoon ? <button type="button" className="outline-button full-button" disabled>Coming soon</button> : !plan.termsReady ? <button type="button" className="outline-button full-button" disabled>Unavailable</button> : reachedLimit ? <button type="button" className="outline-button full-button" disabled>Limit reached</button> : <form onSubmit={submit}><label className="field-label" htmlFor="apply-amount">Investment amount (USDT)</label><input className="form-input" id="apply-amount" value={plan.price} readOnly inputMode="decimal" required/><button className="primary-button full-button apply-button" disabled={busy}>{busy ? 'Submitting…' : signedOut ? 'Sign in to continue' : 'Buy now · Request review'} <Icon name="chevron" size={16}/></button></form>}
+        {plan.comingSoon ? <button type="button" className="outline-button full-button" disabled>Coming soon</button> : !plan.termsReady ? <button type="button" className="outline-button full-button" disabled>Unavailable</button> : reachedLimit ? <button type="button" className="outline-button full-button" disabled>Limit reached</button> : <form onSubmit={submit}><label className="field-label" htmlFor="apply-amount">Investment amount (USDT)</label><input className="form-input" id="apply-amount" value={plan.price} readOnly inputMode="decimal" required/><button className="primary-button full-button apply-button" disabled={busy || reachedLimit || plan.comingSoon || !plan.termsReady || insufficientBalance}>{busy ? 'Purchasing…' : signedOut ? 'Sign in to continue' : reachedLimit ? 'Purchase limit reached' : plan.comingSoon ? 'Coming soon' : insufficientBalance ? 'Insufficient wallet balance' : 'Buy now'} <Icon name="chevron" size={16}/></button></form>}
         {error && <p className="form-error">{error}</p>}
-        <span className="small-legal">Published figures follow administrator-set terms. Return amounts are not credited automatically.</span>
+        <span className="small-legal">{signedOut ? 'Sign in to purchase this plan.' : 'Charged immediately from your available wallet balance (' + formatUSDT(walletAvailablePaise, true) + ' available). No administrator approval is required.'}</span>
       </aside>
     </div>
   </>

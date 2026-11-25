@@ -3,9 +3,10 @@ import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import { ContentItem, Deposit, EmailVerification, InvestmentPlan, LedgerEntry, OtpChallenge, PlanApplication, PlanPosition, PlanRelease, PlatformSettings, RewardClaim, SupportMessage, Transfer, User, Wallet, Withdrawal } from '../models.js'
 import { asyncRoute, requireAuth } from '../middleware.js'
-import { asRupees, ledger, toPaise, walletFor, withTransaction } from '../transactions.js'
+import { asRupees, audit, ledger, toPaise, walletFor, withTransaction } from '../transactions.js'
 import { hashMpin, safeUser, verifyMpin } from '../security.js'
 import { isDemoAuth, sendOtp, verifyOtp } from '../fast2sms.js'
+import { queueReferralRewards, queueWelcomeReward } from '../rewards.js'
 
 const router = Router()
 const mobileSchema = z.string().regex(/^\d{10}$/)
@@ -272,21 +273,90 @@ router.post('/transfers', requireAuth, asyncRoute(async (req, res) => {
 router.post('/plans/:id/apply', requireAuth, asyncRoute(async (req, res) => {
   const requestKey = getRequestKey(req, res)
   if (!requestKey) return
-  const prior = await PlanApplication.findOne({ userId: req.user._id, requestKey })
-  if (prior) return res.json({ application: prior, replayed: true })
-  const plan = await InvestmentPlan.findOne({ _id: req.params.id, isActive: true })
-  if (!plan) return res.status(404).json({ error: 'Plan not found or inactive.' })
-  if (plan.comingSoon) return res.status(409).json({ error: 'This plan is coming soon and is not accepting applications yet.' })
-  if (!plan.pricePaise || !plan.cycle || !plan.durationDays || !plan.profitReturnPaise) return res.status(409).json({ error: 'This plan is not accepting applications until its investment terms are complete.' })
-  const purchaseLimit = Math.max(1, Number(plan.purchaseLimit) || 2)
-  const priorPurchases = await PlanApplication.countDocuments({ userId: req.user._id, planId: plan._id, status: { $in: ['pending', 'accepted'] } })
-  if (priorPurchases >= purchaseLimit) return res.status(409).json({ error: 'You have reached the purchase limit for this plan.' })
-  const amountPaise = toPaise(req.body?.amount)
-  if (!amountPaise) return res.status(400).json(amountError)
-  if (!plan.pricePaise) return res.status(409).json({ error: 'This plan does not have a price yet.' })
-  if (amountPaise !== plan.pricePaise) return res.status(400).json({ error: `This plan has a fixed price of USDT ${asRupees(plan.pricePaise).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.` })
-  const application = await PlanApplication.create({ userId: req.user._id, planId: plan._id, requestKey, amountPaise })
-  res.status(201).json({ application })
+  try {
+    const purchase = await withTransaction(async (session) => {
+      const prior = await PlanApplication.findOne({ userId: req.user._id, requestKey }).session(session)
+      if (prior) {
+        const position = await PlanPosition.findOne({ applicationId: prior._id }).session(session).lean()
+        return { application: prior, position, replayed: true }
+      }
+      const fail = (status, message) => {
+        const error = new Error(message)
+        error.status = status
+        throw error
+      }
+      const plan = await InvestmentPlan.findOne({ _id: req.params.id, isActive: true }).session(session)
+      if (!plan) fail(404, 'Plan not found or inactive.')
+      if (plan.comingSoon) fail(409, 'This plan is coming soon and is not accepting purchases yet.')
+      if (!plan.pricePaise || !plan.cycle || !plan.durationDays || !plan.profitReturnPaise) {
+        fail(409, 'This plan is not available until its investment terms are complete.')
+      }
+      const amountPaise = toPaise(req.body?.amount)
+      if (!amountPaise) fail(400, amountError.error)
+      if (amountPaise !== plan.pricePaise) {
+        const fixedAmount = asRupees(plan.pricePaise).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        fail(400, 'This plan has a fixed price of USDT ' + fixedAmount + '.')
+      }
+      const purchaseLimit = Math.max(1, Number(plan.purchaseLimit) || 2)
+      const priorPurchases = await PlanApplication.countDocuments({
+        userId: req.user._id,
+        planId: plan._id,
+        status: { $in: ['pending', 'accepted'] },
+      }).session(session)
+      if (priorPurchases >= purchaseLimit) fail(409, 'You have reached the purchase limit for this plan.')
+      const wallet = await walletFor(req.user._id, session)
+      if (wallet.availablePaise < amountPaise) fail(409, 'Your available wallet balance is too low for this plan.')
+      wallet.availablePaise -= amountPaise
+      wallet.investedPaise += amountPaise
+      await wallet.save({ session })
+      const purchasedAt = new Date()
+      const [application] = await PlanApplication.create([{
+        userId: req.user._id,
+        planId: plan._id,
+        requestKey,
+        amountPaise,
+        status: 'accepted',
+        reviewedAt: purchasedAt,
+        reviewNote: 'Purchased directly from the available wallet balance.',
+      }], { session })
+      const [position] = await PlanPosition.create([{
+        userId: req.user._id,
+        planId: plan._id,
+        applicationId: application._id,
+        amountPaise,
+        cycle: plan.cycle,
+        durationDays: plan.durationDays,
+        profitReturnPaise: plan.profitReturnPaise,
+        investmentRoiPct: plan.investmentRoiPct,
+      }], { session })
+      await ledger(session, {
+        userId: req.user._id,
+        kind: 'investment',
+        direction: 'debit',
+        amountPaise,
+        referenceType: 'planApplication',
+        referenceId: application._id,
+        description: 'Investment purchased from wallet',
+      })
+      await queueReferralRewards(session, application)
+      await queueWelcomeReward(session, req.user._id)
+      await audit(session, req.user._id, 'plan.purchased', 'planApplication', application._id, {
+        planId: plan._id,
+        amountPaise,
+      })
+      return { application, position, replayed: false }
+    })
+    return res.status(purchase.replayed ? 200 : 201).json(purchase)
+  } catch (error) {
+    if (error?.code === 11000) {
+      const prior = await PlanApplication.findOne({ userId: req.user._id, requestKey }).lean()
+      if (prior) {
+        const position = await PlanPosition.findOne({ applicationId: prior._id }).lean()
+        return res.json({ application: prior, position, replayed: true })
+      }
+    }
+    throw error
+  }
 }))
 
 async function teamLevelsFor(user) {
