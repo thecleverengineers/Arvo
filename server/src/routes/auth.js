@@ -119,7 +119,7 @@ router.post('/register', authLimiter, asyncRoute(async (req, res) => {
     })
     await Wallet.create({ userId: user._id, currency: 'USDT' })
     res.cookie('arvo_session', signSession(user), cookieOptions())
-    res.status(201).json({ ok: true, user: safeUser(user) })
+    res.status(201).json({ ok: true, user: safeUser(user, { includeAvatar: true }) })
   } catch (error) {
     if (error.code === 11000) return res.status(409).json({ error: 'An account was just created for this mobile. Sign in instead.' })
     throw error
@@ -144,7 +144,7 @@ router.post('/login', authLimiter, asyncRoute(async (req, res) => {
     await user.save()
   }
   res.cookie('arvo_session', signSession(user), cookieOptions())
-  res.json({ ok: true, user: safeUser(user) })
+  res.json({ ok: true, user: safeUser(user, { includeAvatar: true }) })
 }))
 
 router.post('/password/reset/send', sendLimiter, asyncRoute(async (req, res) => {
@@ -202,11 +202,11 @@ router.post('/password/reset', sendLimiter, asyncRoute(async (req, res) => {
   if (adminMobile && adminMobile === mobile) user.role = 'admin'
   await user.save()
   res.cookie('arvo_session', signSession(user), cookieOptions())
-  res.json({ ok: true, user: safeUser(user) })
+  res.json({ ok: true, user: safeUser(user, { includeAvatar: true }) })
 }))
 
 router.post('/logout', (_req, res) => { res.clearCookie('arvo_session', cookieOptions()); res.json({ ok: true }) })
-router.get('/me', requireAuth, asyncRoute(async (req, res) => res.json({ user: safeUser(req.user) })))
+router.get('/me', requireAuth, asyncRoute(async (req, res) => res.json({ user: safeUser(req.user, { includeAvatar: true }) })))
 
 router.post('/email/send-verification', requireAuth, asyncRoute(async (req, res) => {
   const email = z.string().trim().email().max(254).safeParse(req.body?.email || req.user.email)
@@ -236,7 +236,7 @@ router.post('/email/verify', asyncRoute(async (req, res) => {
   user.emailVerifiedAt = new Date()
   await user.save()
   await record.deleteOne()
-  res.json({ ok: true, user: safeUser(user) })
+  res.json({ ok: true, user: safeUser(user, { includeAvatar: true }) })
 }))
 
 export default router
