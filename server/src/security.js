@@ -55,8 +55,8 @@ export function makeReferralCode() {
   return `ARVO${crypto.randomBytes(4).toString('hex').toUpperCase()}`
 }
 
-export function safeUser(user) {
-  return {
+export function safeUser(user, { includeAvatar = false } = {}) {
+  const safe = {
     id: user._id.toString(),
     mobile: user.mobile,
     name: user.name || '',
@@ -69,4 +69,6 @@ export function safeUser(user) {
     referralCode: user.referralCode,
     createdAt: user.createdAt,
   }
+  if (includeAvatar) safe.avatarUrl = user.avatarUrl || ''
+  return safe
 }
