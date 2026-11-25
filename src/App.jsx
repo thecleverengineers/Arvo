@@ -267,9 +267,9 @@ function App() {
       <div className="topbar-right">
         <div className="live-theme-chip" title={`Live visual identity: ${currentTheme.name}`}><span className="live-theme-gem" style={{ background: currentTheme.colors[0] }}/><span className="live-theme-label">{currentTheme.name}</span></div>
         {user ? <><button className="icon-button notification-button" aria-label="Support chat" onClick={() => navigate('Support')}><Icon name="bell"/><i/></button><div className="account-menu-wrap">
-          <button className="avatar-button" onClick={() => setAccountMenuOpen((open) => !open)} aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen}>{initials(user.name)}</button>
+          <button className="avatar-button" onClick={() => setAccountMenuOpen((open) => !open)} aria-label="Open account menu" aria-haspopup="menu" aria-expanded={accountMenuOpen}>{user.avatarUrl ? <img className="topbar-avatar-image" src={user.avatarUrl} alt=""/> : initials(user.name)}</button>
           {accountMenuOpen && <div className="account-menu" role="menu" aria-label="Account menu">
-            <div className="account-menu-heading"><span className="account-menu-avatar">{initials(user.name)}</span><span><strong>{user.name || 'Arvo member'}</strong><small>+91 {user.mobile}</small></span></div>
+            <div className="account-menu-heading">{user.avatarUrl ? <img className="account-menu-avatar account-menu-avatar-image" src={user.avatarUrl} alt=""/> : <span className="account-menu-avatar">{initials(user.name)}</span>}<span><strong>{user.name || 'Arvo member'}</strong><small>+91 {user.mobile}</small></span></div>
             <button className="account-menu-item" role="menuitem" onClick={() => openAccountItem('profile')}><Icon name="user" size={18}/>Profile</button>
             <button className="account-menu-item" role="menuitem" onClick={() => openAccountItem('income')}><Icon name="chart" size={18}/>Income history</button>
             <button className="account-menu-item" role="menuitem" onClick={() => openAccountItem('team')}><Icon name="users" size={18}/>Team</button>
