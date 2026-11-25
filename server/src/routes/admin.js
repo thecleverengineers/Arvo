@@ -119,9 +119,17 @@ router.get('/plans', asyncRoute(async (_req, res) => {
   res.json({ plans: plans.map((plan) => ({ ...plan, price: plan.pricePaise ? asRupees(plan.pricePaise) : null, dailyProfit: asRupees(plan.dailyProfitPaise || 0), profitReturn: asRupees(plan.profitReturnPaise || 0) })) })
 }))
 
+async function enforcePlanCategoryLimit(category, isActive, excludedId = null) {
+  if (!isActive || !['Daily', 'VIP'].includes(category)) return false
+  const filter = { category, isActive: true }
+  if (excludedId) filter._id = { $ne: excludedId }
+  return (await InvestmentPlan.countDocuments(filter)) >= 9
+}
+
 router.post('/plans', asyncRoute(async (req, res) => {
   const parsed = parsePlan(req.body, { requirePrice: true })
   if (parsed.error) return res.status(400).json({ error: parsed.error })
+  if (await enforcePlanCategoryLimit(parsed.data.category, parsed.data.isActive)) return res.status(409).json({ error: `Arvo allows up to 9 active ${parsed.data.category} plans.` })
   const plan = await InvestmentPlan.create({ ...parsed.data, createdBy: req.user._id })
   await AuditLog.create({ actorId: req.user._id, action: 'plan.created', targetType: 'investmentPlan', targetId: plan._id, details: { slug: plan.slug } })
   res.status(201).json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null, dailyProfit: asRupees(plan.dailyProfitPaise || 0), profitReturn: asRupees(plan.profitReturnPaise || 0) } })
@@ -134,6 +142,7 @@ router.patch('/plans/:id', asyncRoute(async (req, res) => {
   if (!currentPlan) return res.status(404).json({ error: 'Plan not found.' })
   const nextPricePaise = parsed.data.pricePaise ?? currentPlan.pricePaise
   if (parsed.data.isActive && !nextPricePaise) return res.status(400).json({ error: 'Set a fixed price before publishing this plan.' })
+  if (await enforcePlanCategoryLimit(parsed.data.category, parsed.data.isActive, currentPlan._id)) return res.status(409).json({ error: `Arvo allows up to 9 active ${parsed.data.category} plans.` })
   const plan = await InvestmentPlan.findByIdAndUpdate(req.params.id, parsed.data, { new: true, runValidators: true })
   await AuditLog.create({ actorId: req.user._id, action: 'plan.updated', targetType: 'investmentPlan', targetId: plan._id, details: { slug: plan.slug } })
   res.json({ plan: { ...plan.toObject(), price: plan.pricePaise ? asRupees(plan.pricePaise) : null, dailyProfit: asRupees(plan.dailyProfitPaise || 0), profitReturn: asRupees(plan.profitReturnPaise || 0) } })
