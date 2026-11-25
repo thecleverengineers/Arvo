@@ -259,8 +259,8 @@ function App() {
     notify(result.message || 'Withdrawal MPIN saved securely')
   }
 
-  const navItems = [['Home','home','Home'],['Income','chart','Income'],['Team','users','Team'],['Share','share','Referrals'],['My','user','My']]
-  const activeNavPage = ({ Plans: 'Home', Wallet: 'My', Profile: 'My', Settings: 'My', Messages: 'My', About: 'My', Install: 'My', Bonuses: 'My', Support: 'My', Admin: 'My', RechargeDetails: 'My', WithdrawalDetails: 'My', Referrals: 'Share' })[page] || page
+  const navItems = [['Home','home','Home'],['Referral','share','Referrals'],['Wallet','wallet','Wallet'],['Team','users','Team'],['My','user','My']]
+  const activeNavPage = ({ Plans: 'Home', Profile: 'My', Settings: 'My', Messages: 'My', About: 'My', Install: 'My', Bonuses: 'My', Support: 'My', Admin: 'My', RechargeDetails: 'My', WithdrawalDetails: 'My', Referrals: 'Referral' })[page] || page
   const currentTheme = themes.find((item) => item.id === theme) || themes[0]
 
   return <div className="app-shell" data-theme={theme} data-view={page === 'Admin' ? 'admin' : 'mobile'}>
