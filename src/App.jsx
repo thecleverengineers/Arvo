@@ -313,7 +313,7 @@ function App() {
         {page === 'Profile' && <ProfilePage user={user} theme={theme} onSave={saveProfile} onSendEmail={sendEmailVerification} onSendMpinOtp={sendMpinOtp} onSaveMpin={saveMpin} onSupport={() => navigate('Support')} onAdmin={() => navigate('Admin')} onLogout={logout} notify={notify}/>}
         {page === 'Settings' && <SettingsPage theme={theme} languages={settings.languages || ['en']} language={language} onLanguageChange={changeLanguage}/>}
         {page === 'Support' && <SupportChat notify={notify}/>}
-        {page === 'Admin' && user.role === 'admin' && <AdminPage notify={notify} onRefresh={async () => { await loadPublicData(); await loadAccountData() }}/>}
+        {page === 'Admin' && user.role === 'admin' && <AdminPage notify={notify} onRefresh={async () => { await loadPublicData(); await loadAccountData() }} onExit={() => navigate('Home')}/>}
       </>}
     </main>
 
@@ -1139,8 +1139,7 @@ function AdminPlanTerms({ plan, busy, onSave }) {
   </div>
 }
 
-function AdminPage({ notify, onRefresh }) {
-  const tabs = ['Overview', 'Deposits', 'Withdrawals', 'Applications', 'Positions', 'Rewards', 'Plans', 'Users', 'Content', 'Support', 'Themes', 'Settings', 'Ledger']
+function AdminPage({ notify, onRefresh, onExit }) {
   const [tab, setTab] = useState('Overview')
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -1154,6 +1153,9 @@ function AdminPage({ notify, onRefresh }) {
   const [languagesText, setLanguagesText] = useState('en')
   const [rewardDraft, setRewardDraft] = useState({ enabled: false, welcomeBonus: '0', level1Pct: '0', level2Pct: '0', level3Pct: '0', teamMilestone: '0', teamMilestoneReward: '0', dailyInviteReward: '0' })
   const [search, setSearch] = useState('')
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  function openTab(nextTab) { setTab(nextTab); setMobileNavOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
   async function load(nextTab = tab) {
     setBusy(true); setError('')
@@ -1232,9 +1234,26 @@ function AdminPage({ notify, onRefresh }) {
     await mutate('/admin/settings', 'PUT', { paymentMethods: settings.paymentMethods || [], languages, themeIds: settings.themeIds || themes.map((item) => item.id), rewards: rewardDraft }, 'Platform settings saved')
   }
 
-  const titleForTab = { Overview: 'Administration', Deposits: 'Deposit management', Withdrawals: 'Withdrawal management', Applications: 'Plan applications', Positions: 'Investment positions', Rewards: 'Reward claims', Plans: 'Plan management', Users: 'Users management', Content: 'News & web management', Support: 'Live chat support', Themes: 'Theme management', Settings: 'Platform settings', Ledger: 'Transaction log' }
-  return <><PageHeading eyebrow="ARVO CONTROL CENTRE" title={titleForTab[tab]} subtitle="Review account activity and manage published platform data."/><div className="admin-tabs">{tabs.map((item) => <button key={item} className={tab === item ? 'selected' : ''} onClick={() => setTab(item)}>{item}</button>)}</div>{busy && <div className="inline-loading">Loading…</div>}{error && <p className="form-error admin-error">{error}</p>}
-    {tab === 'Overview' && data?.overview && <><div className="admin-stat-grid">{[['Users',data.overview.users],['Active users',data.overview.activeUsers],['Published plans',data.overview.plans],['Pending deposits',data.overview.pendingDeposits],['Pending withdrawals',data.overview.pendingWithdrawals],['Plan applications',data.overview.pendingApplications]].map(([label,value]) => <div className="admin-stat" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><section className="section-block"><div className="section-heading"><div><span className="eyebrow">LATEST LEDGER ENTRIES</span><h2>Recent account activity</h2></div><button className="inline-link" onClick={() => setTab('Ledger')}>Open log <Icon name="chevron" size={15}/></button></div><LedgerTable entries={data.overview.recentEntries || []}/></section></>}
+  const titleForTab = { Overview: 'Overview', Deposits: 'Deposits', Withdrawals: 'Withdrawals', Applications: 'Plan applications', Positions: 'Investment positions', Rewards: 'Rewards', Plans: 'Investment plans', Users: 'User management', Content: 'Content management', Support: 'Support inbox', Themes: 'Theme studio', Settings: 'Platform settings', Ledger: 'Transaction ledger' }
+  const descriptionForTab = { Overview: 'A live view of users, balances and platform activity.', Deposits: 'Review and process incoming deposit requests.', Withdrawals: 'Review payout requests and mark completed transfers.', Applications: 'Approve or decline investment plan applications.', Positions: 'Track active plans and release scheduled returns.', Rewards: 'Review referral and bonus reward claims.', Plans: 'Publish plans, edit terms, set prices and manage plan images.', Users: 'Manage member access and administrator roles.', Content: 'Publish home announcements, updates and website content.', Support: 'Respond to member questions and support conversations.', Themes: 'Preview and publish the visual theme for Arvo.', Settings: 'Configure payment methods, languages and reward rules.', Ledger: 'Browse posted wallet activity across Arvo.' }
+  const navGroups = [
+    { label: 'Workspace', items: [['Overview', 'home']] },
+    { label: 'Operations', items: [['Deposits', 'arrowDown'], ['Withdrawals', 'arrowUp'], ['Applications', 'check'], ['Positions', 'layers'], ['Rewards', 'gift'], ['Ledger', 'chart']] },
+    { label: 'Platform', items: [['Plans', 'layers'], ['Content', 'list'], ['Themes', 'spark'], ['Settings', 'sun']] },
+    { label: 'People', items: [['Users', 'users'], ['Support', 'help']] },
+  ]
+  return <div className="admin-workspace">
+    <button type="button" className={'admin-sidebar-scrim ' + (mobileNavOpen ? 'is-visible' : '')} aria-label="Close admin navigation" tabIndex={mobileNavOpen ? 0 : -1} onClick={() => setMobileNavOpen(false)}/>
+    <aside className={'admin-sidebar ' + (mobileNavOpen ? 'is-open' : '')} aria-label="Admin navigation">
+      <div className="admin-sidebar-brand"><span className="admin-sidebar-mark">A</span><span><strong>ARVO</strong><small>ADMIN CONSOLE</small></span></div>
+      <div className="admin-sidebar-workspace"><span>WORKSPACE</span><strong>Platform control</strong><i><b/> Connected workspace</i></div>
+      <nav className="admin-sidebar-nav">{navGroups.map((group) => <div className="admin-nav-group" key={group.label}><span className="admin-nav-label">{group.label}</span>{group.items.map(([item, icon]) => <button type="button" key={item} className={'admin-nav-item ' + (tab === item ? 'selected' : '')} aria-current={tab === item ? 'page' : undefined} onClick={() => openTab(item)}><Icon name={icon} size={17}/><span>{item}</span>{tab === item && <i/>}</button>)}</div>)}</nav>
+      <div className="admin-sidebar-footer"><span><i/> Admin session active</span><button type="button" onClick={onExit}><Icon name="arrowUp" size={16}/>Return to Arvo</button></div>
+    </aside>
+    <section className="admin-workspace-main">
+      <header className="admin-header"><div className="admin-header-title"><button type="button" className="admin-menu-trigger" aria-label="Open admin navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)}><Icon name="list" size={20}/></button><div><span className="admin-header-kicker">ARVO CONTROL CENTRE <i>/</i> {tab.toUpperCase()}</span><h1>{titleForTab[tab]}</h1><p>{descriptionForTab[tab]}</p></div></div><div className="admin-header-actions"><span className="admin-live-pill"><i/>Admin workspace</span><button type="button" className="admin-view-site" onClick={onExit}><Icon name="home" size={16}/><span>View site</span></button></div></header>
+      <div className="admin-view-body">{busy && <div className="inline-loading">Loading…</div>}{error && <p className="form-error admin-error">{error}</p>}
+    {tab === 'Overview' && data?.overview && <><div className="admin-stat-grid">{[['Users',data.overview.users],['Active users',data.overview.activeUsers],['Published plans',data.overview.plans],['Pending deposits',data.overview.pendingDeposits],['Pending withdrawals',data.overview.pendingWithdrawals],['Plan applications',data.overview.pendingApplications]].map(([label,value]) => <div className="admin-stat" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div><section className="section-block"><div className="section-heading"><div><span className="eyebrow">LATEST LEDGER ENTRIES</span><h2>Recent account activity</h2></div><button className="inline-link" onClick={() => openTab('Ledger')}>Open log <Icon name="chevron" size={15}/></button></div><LedgerTable entries={data.overview.recentEntries || []}/></section></>}
     {tab === 'Deposits' && <RequestTable items={data?.deposits || []} type="deposit" onDecision={(item, decision) => mutate(`/admin/deposits/${item._id}/review`, 'PATCH', { decision }, `Deposit ${decision}ed`)}/>}
     {tab === 'Withdrawals' && <RequestTable items={data?.withdrawals || []} type="withdrawal" onDecision={(item, decision) => mutate(`/admin/withdrawals/${item._id}/review`, 'PATCH', { decision }, `Withdrawal ${decision}`)}/>}
     {tab === 'Applications' && <RequestTable items={data?.applications || []} type="application" onDecision={(item, decision) => mutate(`/admin/applications/${item._id}/review`, 'PATCH', { decision }, `Application ${decision}ed`)}/>}
@@ -1247,7 +1266,9 @@ function AdminPage({ notify, onRefresh }) {
     {tab === 'Content' && <ContentManager onChanged={onRefresh}/>}
     {tab === 'Support' && <AdminSupportPanel/>}
     {tab === 'Ledger' && <LedgerTable entries={data?.entries || []}/>}
-  </>
+      </div>
+    </section>
+  </div>
 }
 
 function AdminPositions({ positions, busy, onRelease }) {
