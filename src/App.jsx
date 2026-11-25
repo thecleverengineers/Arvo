@@ -505,8 +505,8 @@ function HomeAnnouncementPopup({ item, visible }) {
       <footer className="home-announcement-footer">
         {actionUrl
           ? <a className="home-announcement-cta" href={actionUrl} target={actionUrl.startsWith('https://') ? '_blank' : undefined} rel={actionUrl.startsWith('https://') ? 'noreferrer' : undefined} onClick={close}>{buttonLabel}<Icon name="chevron" size={17}/></a>
-           : <button type="button" className="home-announcement-cta home-announcement-cta-disabled" disabled title="Telegram channel URL not configured">{buttonLabel}<Icon name="chevron" size={17}/></button>}
-        {!actionUrl && <p className="home-announcement-link-note">Telegram channel link is not set yet.</p>}
+          : <button type="button" className="home-announcement-cta" disabled title="Telegram channel URL not configured">{buttonLabel}<Icon name="chevron" size={17}/></button>}
+        {!actionUrl && <p style={{ margin: '8px 0 0', color: 'var(--muted)', fontSize: 10, textAlign: 'center' }}>Telegram channel link is not set yet.</p>}
       </footer>
     </section>
   </div>
