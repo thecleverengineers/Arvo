@@ -568,3 +568,27 @@ body { background: #e8e9e8; }
     gap:10px;
   }
 }
+
+
+/* Free and developer activated themes in the admin theme studio. */
+.studio-theme-option { display:flex; flex-direction:column; min-width:0; }
+.studio-theme-option .studio-theme-card { width:100%; flex:1; }
+.studio-theme-card.is-locked { cursor:default; border-style:dashed; }
+.studio-theme-card.is-locked:hover { transform:none; }
+.studio-theme-title-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:7px; }
+.studio-access-badge { display:inline-flex; align-items:center; gap:4px; border-radius:999px; padding:5px 8px; font-size:8px; line-height:1; font-weight:800; white-space:nowrap; }
+.studio-access-badge.is-free { color:var(--accent-strong); background:var(--soft-green); }
+.studio-access-badge.is-paid { color:var(--highlight); background:color-mix(in srgb,var(--highlight) 13%,var(--card)); border:1px solid color-mix(in srgb,var(--highlight) 28%,var(--border)); }
+.studio-access-badge i { font-style:normal; opacity:.78; }
+.studio-contact-link { min-height:53px; display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; padding:9px 12px; border:1px solid color-mix(in srgb,var(--highlight) 35%,var(--border)); border-radius:13px; color:var(--text); background:linear-gradient(120deg,color-mix(in srgb,var(--highlight) 12%,var(--card)),var(--card)); text-decoration:none; transition:border-color .18s,transform .18s; }
+.studio-contact-link:hover { border-color:var(--highlight); transform:translateY(-1px); }
+.studio-contact-link > span:first-child { display:grid; gap:3px; }
+.studio-contact-link strong { font-size:10px; font-weight:800; }
+.studio-contact-link small { color:var(--muted); font-size:9px; }
+.studio-contact-link > span:last-child { color:var(--highlight); font-size:18px; }
+.studio-publish-bar button:disabled { cursor:not-allowed; }
+@media (max-width:799px) {
+  .studio-contact-link { min-height:49px; padding:8px 10px; }
+  .studio-contact-link strong { font-size:9px; }
+  .studio-contact-link small { font-size:8px; }
+}
