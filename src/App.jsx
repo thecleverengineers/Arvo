@@ -666,7 +666,7 @@ function MyPage({ user, wallet, income, onNavigate, onLogout, onKyc, onAdmin, on
     catch (error) { setPhotoError(error.message || 'Could not remove your profile photo.') }
     finally { setPhotoBusy(false) }
   }
-  return <><PageHeading eyebrow="YOUR ARVO ACCOUNT" title="My" subtitle="Your balance, account details and preferences."/>
+  return <>
     <section className="my-profile-summary" aria-label="Your profile">
       <button type="button" className="my-profile-photo-button" onClick={() => photoInput.current?.click()} disabled={photoBusy} aria-label={photoBusy ? 'Updating profile photo' : 'Change profile photo'}>
         {user.avatarUrl ? <img className="my-profile-photo" src={user.avatarUrl} alt="Your profile"/> : <span className="my-profile-photo-fallback">{initials(user.name)}</span>}
