@@ -122,8 +122,8 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
 .intro-seal { width: 40px; height: 40px; flex: 0 0 40px; color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 13%, var(--card)); border-radius: 50%; display: grid; place-items: center; }
 .plan-intro strong { font: 600 14px 'Manrope',sans-serif; }
 .plan-intro p { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
-.plan-category-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 18px 0 14px; padding: 5px; border: 1px solid var(--border); border-radius: 16px; background: var(--card-soft); }
-.plan-category-tabs button { min-width: 0; min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 13px; border: 1px solid transparent; border-radius: 12px; color: var(--muted); background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
+.plan-category-tabs { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 18px 0 14px; padding: 5px; border: 1px solid var(--border); border-radius: 16px; background: var(--card-soft); }
+.plan-category-tabs button { width: 100%; min-width: 0; min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border: 1px solid transparent; border-radius: 12px; color: var(--muted); background: transparent; font-size: 12px; font-weight: 700; text-align: center; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
 .plan-category-tabs button.selected { color: var(--deep); border-color: color-mix(in srgb, var(--accent) 22%, var(--border)); background: var(--card); box-shadow: 0 4px 12px rgba(18,40,31,.08); }
 .plan-category-tabs button:focus-visible, .plan-page-number:focus-visible, .plan-page-arrow:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 48%, white); outline-offset: 2px; }
 .plan-category-count { min-width: 25px; height: 25px; display: grid; place-items: center; border-radius: 99px; color: var(--muted); background: var(--page); font-size: 9px; font-weight: 800; }
@@ -234,14 +234,9 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
 
 /* API-connected account screens and workflows */
 .top-signin { min-height: 35px; padding: 0 13px; font-size: 10px; }
-.loading-state { min-height: 55vh; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px; color: var(--muted); font-size: 11px; }
-.loading-spinner { position: relative; width: 66px; height: 66px; display: grid; place-items: center; }
-.loading-spinner::before, .loading-spinner::after { content: ''; position: absolute; border-radius: 50%; }
-.loading-spinner::before { inset: 0; border: 2px solid var(--border); border-top-color: var(--accent); border-right-color: var(--accent); animation: loading-ring .9s linear infinite; }
-.loading-spinner::after { inset: 7px; border: 1px solid var(--border); opacity: .85; }
-.loading-logo { position: relative; z-index: 1; width: 38px; height: 38px; border-radius: 11px; object-fit: contain; box-shadow: 0 3px 14px rgba(0,0,0,.22); }
-@keyframes loading-ring { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .loading-spinner::before { animation-duration: 3s; } }
+.loading-state { min-height: 55vh; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 13px; color: var(--muted); font-size: 11px; }
+.loading-mark { width: 43px; height: 43px; display: grid; place-items: center; border-radius: 14px 14px 14px 4px; background: var(--deep); color: #e3c983; font: 800 22px 'Manrope', sans-serif; animation: pulse 1.2s ease-in-out infinite alternate; }
+@keyframes pulse { to { transform: translateY(-3px); opacity: .72; } }
 .signed-out-page { display: grid; grid-template-columns: 1.12fr .88fr; align-items: center; gap: 34px; min-height: 500px; }
 .signed-out-copy { padding: 15px 0; }
 .signed-out-copy h1 { max-width: 620px; margin: 13px 0 12px; font-size: clamp(34px, 4.6vw, 53px); line-height: 1.08; font-weight: 600; letter-spacing: -.06em; }
@@ -339,6 +334,7 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
   .balance-arrow { width: 36px; height: 36px; margin-left: -8px; }
   .hero-line { left: 28%; bottom: 66px; height: 64px; opacity: .38; }
   .side-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .home-summary-grid .side-cards { gap: 10px; }
   .small-stat-card { min-height: 122px; padding: 14px; border-radius: 16px; }
   .stat-card-top { margin-bottom: 12px; }
   .stat-icon { width: 36px; height: 36px; border-radius: 12px; }
@@ -510,7 +506,7 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
 }
 
 /* Home jewelry image carousel */
-.jewelry-carousel { margin: 0 0 13px; }
+.jewelry-carousel { margin: 19px 0 7px; }
 .jewelry-carousel-slide { position: relative; min-height: 220px; overflow: hidden; display: block; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: 18px; background: var(--deep); box-shadow: var(--shadow); isolation: isolate; }
 .jewelry-carousel-slide { touch-action: pan-y; }
 .jewelry-carousel-image { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
@@ -529,7 +525,7 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
 .jewelry-carousel-dots button { width: 6px; height: 6px; flex: 0 0 6px; padding: 0; border: 0; border-radius: 99px; background: rgba(255,255,255,.5); cursor: pointer; transition: width .2s ease, background .2s ease; }
 .jewelry-carousel-dots button.active { width: 19px; flex-basis: 19px; background: #e4c77a; }
 @media (max-width: 640px) {
-  .jewelry-carousel { margin-top: 15px; }
+  .jewelry-carousel { margin-top: 0; }
   .jewelry-carousel-slide { min-height: 190px; border-radius: 15px; }
   .jewelry-carousel-copy { left: 15px; bottom: 38px; width: 66%; }
   .jewelry-carousel-copy h2 { font-size: 17px; }
@@ -542,8 +538,3 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
 }
 .carousel-limit-note { margin: 0 0 12px; color: var(--muted); font-size: 10px; }
 .carousel-image-preview { display: block; width: 100%; max-height: 230px; border: 1px solid var(--border); border-radius: 11px; background: var(--page); object-fit: cover; }
-
-@media (max-width: 640px) {
-  .home-summary-grid .side-cards { gap: 10px; }
-  .jewelry-carousel { margin-top: 0; }
-}
