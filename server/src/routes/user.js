@@ -83,7 +83,7 @@ router.get('/plans/:slug', asyncRoute(async (req, res) => {
 }))
 
 router.get('/content/:type', asyncRoute(async (req, res) => {
-  const allowed = ['news', 'banner', 'work_area', 'about', 'service', 'investor', 'partner', 'social', 'menu', 'logo', 'icon']
+  const allowed = ['news', 'banner', 'announcement_popup', 'work_area', 'about', 'service', 'investor', 'partner', 'social', 'menu', 'logo', 'icon']
   if (!allowed.includes(req.params.type)) return res.status(404).json({ error: 'Content type not found.' })
   const language = String(req.query.language || 'en').trim().toLowerCase().slice(0, 12)
   const limit = req.params.type === 'banner' ? 10 : 500
