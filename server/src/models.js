@@ -197,7 +197,7 @@ const contentItemSchema = new Schema({
   title: { type: String, required: true, trim: true, maxlength: 160 },
   slug: { type: String, required: true, trim: true, lowercase: true, maxlength: 180 },
   body: { type: String, trim: true, maxlength: 12000, default: '' },
-  imageUrl: { type: String, trim: true, maxlength: 1000, default: '' },
+  imageUrl: { type: String, trim: true, maxlength: 600000, default: '' },
   language: { type: String, trim: true, lowercase: true, maxlength: 12, default: 'en' },
   sortOrder: { type: Number, default: 0 },
   isPublished: { type: Boolean, default: false, index: true },
