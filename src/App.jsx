@@ -879,36 +879,45 @@ function SettingsPage({ theme, languages = ['en'], language = 'en', onLanguageCh
 function ThemeStudio({ activeTheme, draftTheme, onSelect, onPublish, busy }) {
   const selected = themes.find((item) => item.id === draftTheme) || themes[0]
   const live = themes.find((item) => item.id === activeTheme) || themes[0]
+  const selectedIsFree = ['emerald', 'ivory'].includes(selected.id)
+  const telegramUrl = 'https://t.me/cleverengineers'
   return <section className="theme-studio">
     <div className="studio-intro">
-      <div><span className="eyebrow">GLOBAL VISUAL IDENTITY</span><h2>Choose the experience everyone sees.</h2><p>Explore all five premium mobile themes. Selecting a preview does not change the live app until you publish it.</p></div>
+      <div><span className="eyebrow">GLOBAL VISUAL IDENTITY</span><h2>Choose the experience everyone sees.</h2><p>Emerald Luxe and Ivory Champagne are free to activate. Every other theme costs USDT 30; contact the developer on Telegram to activate it.</p></div>
       <span className="studio-live-status"><i/> Live now: {live.name}</span>
     </div>
     <div className="studio-grid">
-      {themes.map((item) => <button type="button" key={item.id} onClick={() => onSelect(item.id)} aria-pressed={draftTheme === item.id} className={`studio-theme-card ${draftTheme === item.id ? 'is-selected' : ''}`} >
-        <span className="studio-mini-phone" data-preview-theme={item.id}>
-          <span className="studio-phone-top"><span>9:41</span><span>●●●</span></span>
-          <span className="studio-phone-brand"><span className="studio-phone-logo">A</span> arvo.</span>
-          <span className="studio-phone-greeting">Welcome back</span>
-          <span className="studio-phone-balance"><small>Your portfolio</small><strong>USDT 125,430.00</strong><em>PORTFOLIO OVERVIEW</em><span className="studio-phone-chart"/></span>
-          <span className="studio-phone-tiles"><i/><i/><i/></span>
-          <span className="studio-phone-bottom"><i/><i/><i/><i/></span>
-        </span>
-        <span className="studio-theme-details">
-          <strong>{item.name}</strong>
-          <small>{{
-            emerald:'Deep emerald with luminous gold and refined contrast',
-            obsidian:'Statement charcoal surfaces with rich gold',
-            ivory:'Warm ivory, champagne accents and elegant spacing',
-            sapphire:'Midnight navy with electric blue details',
-            burgundy:'Burgundy and rose-gold with soft sophistication',
-          }[item.id]}</small>
-          <span className="studio-palette">{item.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span>
-          <span className="studio-theme-state">{item.id === activeTheme ? '● Live theme' : draftTheme === item.id ? 'Selected to preview' : 'Preview this theme'}{draftTheme === item.id && <Icon name="check" size={15}/>}</span>
-        </span>
-      </button>)}
+      {themes.map((item) => {
+        const isFree = ['emerald', 'ivory'].includes(item.id)
+        const isSelected = draftTheme === item.id
+        return <div className={'studio-theme-option ' + (!isFree ? 'is-premium' : '')} key={item.id}>
+          <button type="button" disabled={!isFree} onClick={() => isFree && onSelect(item.id)} aria-pressed={isFree ? isSelected : undefined} aria-label={isFree ? 'Preview ' + item.name : item.name + ' requires developer activation'} className={'studio-theme-card ' + (isSelected ? 'is-selected' : '') + (!isFree ? ' is-locked' : '')}>
+            <span className="studio-mini-phone" data-preview-theme={item.id}>
+              <span className="studio-phone-top"><span>9:41</span><span>●●●</span></span>
+              <span className="studio-phone-brand"><span className="studio-phone-logo">A</span> arvo.</span>
+              <span className="studio-phone-greeting">Welcome back</span>
+              <span className="studio-phone-balance"><small>Your portfolio</small><strong>USDT 125,430.00</strong><em>PORTFOLIO OVERVIEW</em><span className="studio-phone-chart"/></span>
+              <span className="studio-phone-tiles"><i/><i/><i/></span>
+              <span className="studio-phone-bottom"><i/><i/><i/><i/></span>
+            </span>
+            <span className="studio-theme-details">
+              <span className="studio-theme-title-row"><strong>{item.name}</strong><span className={'studio-access-badge ' + (isFree ? 'is-free' : 'is-paid')}>{isFree ? <><Icon name="check" size={12}/> Free activation</> : <>USDT 30 <i>each</i></>}</span></span>
+              <small>{{
+                emerald:'Deep emerald with luminous gold and refined contrast',
+                obsidian:'Statement charcoal surfaces with rich gold',
+                ivory:'Warm ivory, champagne accents and elegant spacing',
+                sapphire:'Midnight navy with electric blue details',
+                burgundy:'Burgundy and rose-gold with soft sophistication',
+              }[item.id]}</small>
+              <span className="studio-palette">{item.colors.map((color) => <i key={color} style={{ background: color }}/>)}</span>
+              <span className="studio-theme-state">{item.id === activeTheme ? 'Live theme' : !isFree ? 'Developer activation required' : isSelected ? 'Selected to preview' : 'Preview this theme'}{isSelected && isFree && <Icon name="check" size={15}/>}</span>
+            </span>
+          </button>
+          {!isFree && <a className="studio-contact-link" href={telegramUrl} target="_blank" rel="noreferrer"><span><strong>Contact developer</strong><small>@cleverengineers on Telegram</small></span><span aria-hidden="true">↗</span></a>}
+        </div>
+      })}
     </div>
-    <div className="studio-publish-bar"><div><span className="eyebrow">READY TO PUBLISH</span><strong>{selected.name}</strong><small>{activeTheme === draftTheme ? 'This is currently live for all users.' : 'Publishing updates the theme for all users on their next refresh.'}</small></div><button type="button" className="primary-button studio-publish-button" onClick={onPublish} disabled={busy || draftTheme === activeTheme}><Icon name="check" size={17}/>{busy ? 'Publishing…' : draftTheme === activeTheme ? 'Already live' : 'Publish live theme'}</button></div>
+    <div className="studio-publish-bar"><div><span className="eyebrow">READY TO PUBLISH</span><strong>{selected.name}</strong><small>{activeTheme === draftTheme ? 'This is currently live for all users.' : selectedIsFree ? 'This theme is free to activate. Publishing updates it for all users.' : 'This theme needs USDT 30 developer activation. Contact @cleverengineers on Telegram.'}</small></div><button type="button" className="primary-button studio-publish-button" onClick={onPublish} disabled={busy || draftTheme === activeTheme || !selectedIsFree}><Icon name="check" size={17}/>{busy ? 'Publishing…' : draftTheme === activeTheme ? 'Already live' : selectedIsFree ? 'Publish live theme' : 'Activation required'}</button></div>
   </section>
 }
 
