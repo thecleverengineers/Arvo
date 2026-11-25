@@ -290,7 +290,7 @@ function App() {
     </header>
 
     <main className="main-content">
-      {loading ? <div className="loading-state"><span className="loading-mark">A</span><span>Preparing your Arvo experience…</span></div> : !user ? <>
+      {loading ? <div className="loading-state" role="status" aria-label="Loading Arvo"><div className="loading-spinner" aria-hidden="true"><img className="loading-logo" src={brandIcon || '/arvo-icon.svg'} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = '/arvo-icon.svg' }}/></div><span>Preparing your Arvo experience…</span></div> : !user ? <>
         {['Login', 'Register', 'PasswordReset'].includes(page) ? <AuthPage mode={page} onNavigate={navigate} onSignedIn={(nextUser) => { setUser(nextUser); navigate('Home') }} notify={notify}/> : <>
           {page === 'Plans' && !activePlan && <PlansPage plans={plans} wallet={wallet} onOpenPlan={openPlan}/>}
           {page !== 'Plans' && <SignedOutPage plans={plans} onSignIn={() => navigate('Login')} onSignUp={() => navigate('Register')} onBrowse={() => navigate('Plans')} onOpenPlan={openPlan}/>}
