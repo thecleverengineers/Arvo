@@ -193,7 +193,7 @@ const auditSchema = new Schema({
 }, { timestamps: true })
 
 const contentItemSchema = new Schema({
-  type: { type: String, enum: ['news', 'banner', 'work_area', 'about', 'service', 'investor', 'partner', 'social', 'menu', 'logo', 'icon'], required: true, index: true },
+  type: { type: String, enum: ['news', 'banner', 'announcement_popup', 'work_area', 'about', 'service', 'investor', 'partner', 'social', 'menu', 'logo', 'icon'], required: true, index: true },
   title: { type: String, required: true, trim: true, maxlength: 160 },
   slug: { type: String, required: true, trim: true, lowercase: true, maxlength: 180 },
   body: { type: String, trim: true, maxlength: 12000, default: '' },
