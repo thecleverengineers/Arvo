@@ -1,6 +1,6 @@
 import { Deposit, PlanApplication, PlatformSettings, RewardClaim, User } from './models.js'
 
-async function queueWelcomeReward(session, userId) {
+export async function queueWelcomeReward(session, userId) {
   const settings = await PlatformSettings.findOne({ key: 'main' }).session(session).lean()
   const amountPaise = Number(settings?.rewards?.welcomeBonusPaise || 0)
   if (!settings?.rewards?.enabled || amountPaise <= 0) return
@@ -14,7 +14,7 @@ async function queueWelcomeReward(session, userId) {
   await RewardClaim.create([{ claimKey, userId, amountPaise, kind: 'welcome_bonus' }], { session })
 }
 
-async function queueReferralRewards(session, application) {
+export async function queueReferralRewards(session, application) {
   const settings = await PlatformSettings.findOne({ key: 'main' }).session(session).lean()
   const policy = settings?.rewards
   if (!policy?.enabled) return
