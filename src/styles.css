@@ -120,6 +120,22 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
 .intro-seal { width: 40px; height: 40px; flex: 0 0 40px; color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 13%, var(--card)); border-radius: 50%; display: grid; place-items: center; }
 .plan-intro strong { font: 600 14px 'Manrope',sans-serif; }
 .plan-intro p { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
+.plan-category-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 18px 0 14px; padding: 5px; border: 1px solid var(--border); border-radius: 16px; background: var(--card-soft); }
+.plan-category-tabs button { min-width: 0; min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 13px; border: 1px solid transparent; border-radius: 12px; color: var(--muted); background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
+.plan-category-tabs button.selected { color: var(--deep); border-color: color-mix(in srgb, var(--accent) 22%, var(--border)); background: var(--card); box-shadow: 0 4px 12px rgba(18,40,31,.08); }
+.plan-category-tabs button:focus-visible, .plan-page-number:focus-visible, .plan-page-arrow:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 48%, white); outline-offset: 2px; }
+.plan-category-count { min-width: 25px; height: 25px; display: grid; place-items: center; border-radius: 99px; color: var(--muted); background: var(--page); font-size: 9px; font-weight: 800; }
+.plan-category-tabs button.selected .plan-category-count { color: #e8d7a9; background: var(--deep); }
+.plan-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 15px; background: var(--card); box-shadow: var(--shadow); }
+.plan-pagination-controls { display: flex; align-items: center; gap: 6px; }
+.plan-page-number, .plan-page-arrow { min-width: 35px; height: 35px; display: grid; place-items: center; padding: 0 8px; border: 1px solid var(--border); border-radius: 11px; color: var(--muted); background: var(--page); font-size: 10px; font-weight: 800; cursor: pointer; transition: background .18s ease, color .18s ease, border-color .18s ease, transform .18s ease; }
+.plan-page-number:hover:not(.selected), .plan-page-arrow:hover:not(:disabled) { border-color: var(--accent); color: var(--deep); transform: translateY(-1px); }
+.plan-page-number.selected { border-color: var(--deep); color: #e8d7a9; background: var(--deep); box-shadow: 0 5px 12px rgba(18,40,31,.18); }
+.plan-page-arrow:disabled { opacity: .42; cursor: default; }
+.plan-page-arrow.previous svg { transform: rotate(180deg); }
+.plan-pagination-summary { display: flex; align-items: baseline; gap: 7px; color: var(--muted); font-size: 8px; letter-spacing: .12em; white-space: nowrap; }
+.plan-pagination-summary strong { color: var(--text); font-size: 10px; letter-spacing: 0; }
+.home-plans .plan-art { height: 145px; }
 .all-plans .plan-art { height: 145px; }
 .all-plans .plan-card-body { padding: 18px; }
 .all-plans .plan-card-body p { min-height: 42px; }
@@ -348,6 +364,12 @@ h1, h2, h3 { font-family: 'Manrope', 'DM Sans', sans-serif; }
   .page-heading { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 19px; }
   .page-heading p { max-width: 100%; }
   .page-heading .secondary-button { min-height: 42px; padding: 0 14px; font-size: 12px; }
+  .plan-category-tabs { margin-top: 14px; }
+  .plan-category-tabs button { min-height: 43px; padding: 0 10px; font-size: 11px; }
+  .plan-pagination { gap: 8px; padding: 10px; }
+  .plan-pagination-controls { gap: 4px; }
+  .plan-page-number, .plan-page-arrow { min-width: 32px; height: 33px; padding: 0 6px; border-radius: 10px; }
+  .plan-pagination-summary { font-size: 7px; gap: 5px; }
   .all-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .all-plans .plan-art { height: 156px; padding: 11px; }
   .all-plans .plan-card-body { padding: 12px 11px; }
